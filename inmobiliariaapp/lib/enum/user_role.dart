@@ -1,0 +1,1 @@
+enum UserRole { admin, landlord, tenant } // Abogado, Arrendador, Arrendatario

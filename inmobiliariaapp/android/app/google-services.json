@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "285762515551",
+    "project_id": "inmobiliariaarmandomarin",
+    "storage_bucket": "inmobiliariaarmandomarin.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:285762515551:android:734931cfa5edada243e1ea",
+        "android_client_info": {
+          "package_name": "com.example.inmobiliariaapp"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "285762515551-u004g1k80v9jjc0tekonci0v0k5jhciq.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.inmobiliariaapp",
+            "certificate_hash": "dee02ee8d58c30bd3397b7a594d42480b0e04a1f"
+          }
+        },
+        {
+          "client_id": "285762515551-ppfkios4cpdvo59vm3q8hh0sa8d9i4gl.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBllnEKhAuKAIiGgS0_BuqGJ0KIQUA5dSQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "285762515551-ppfkios4cpdvo59vm3q8hh0sa8d9i4gl.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "285762515551-tcdnlslh3u8m32r9ah3eb56fcjd2879d.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.inmobiliariaapp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
