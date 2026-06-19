@@ -18,11 +18,16 @@ import 'package:inmobiliariaapp/ui/components/admin/views/admin_properties_view.
 import 'package:inmobiliariaapp/ui/components/admin/views/admin_users_view.dart';
 import 'package:inmobiliariaapp/ui/components/auth_ux/notification_badge.dart';
 import 'package:inmobiliariaapp/ui/components/global/custom_text.dart';
+import 'package:inmobiliariaapp/ui/pages/viafirma_test_screen.dart';
 import 'package:inmobiliariaapp/utils/themes.dart';
 
 class AdminDashboard extends StatefulWidget {
   final ContractState state;
-  const AdminDashboard({super.key, required this.state});
+
+  const AdminDashboard({
+    super.key,
+    required this.state,
+  });
 
   @override
   State<AdminDashboard> createState() => _AdminDashboardState();
@@ -30,11 +35,18 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   String _currentView = 'contracts';
+
   final ApplicationService _applicationService = ApplicationService();
   final UserService _userService = UserService();
 
   String _getTitle() {
     switch (_currentView) {
+      case 'contracts':
+        return "Solicitudes Activas";
+      case 'final_contracts':
+        return "Archivo de Contratos";
+      case 'viafirma_test':
+        return "Pruebas de Firma Digital";
       case 'properties':
         return "Gestión de Inmuebles";
       case 'users':
@@ -43,8 +55,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
         return "Agenda Judicial";
       case 'config':
         return "Configuración Global";
-      case 'final_contracts':
-        return "Archivo de Contratos";
       default:
         return "Solicitudes Activas";
     }
@@ -57,16 +67,27 @@ class _AdminDashboardState extends State<AdminDashboard> {
           applicationService: _applicationService,
           emptyStateBuilder: _buildEmptyState,
         );
+
       case 'final_contracts':
         return const AdminFinalContractsScreen();
+
+      case 'viafirma_test':
+        return const ViafirmaTestScreen();
+
       case 'properties':
         return const AdminPropertiesView();
+
       case 'users':
-        return AdminUsersView(userService: _userService);
+        return AdminUsersView(
+          userService: _userService,
+        );
+
       case 'appointments':
         return const AdminAppointmentsScreen();
+
       case 'config':
         return const AdminConfigScreen();
+
       default:
         return AdminApplicationsView(
           applicationService: _applicationService,
@@ -82,20 +103,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
       appBar: AppBar(
         title: CustomText(
           _getTitle(),
-          baseFontSize: ResponsiveUtils.getFontSize(context, 20),
+          baseFontSize: ResponsiveUtils.getFontSize(context, 18),
           fontWeight: FontWeight.bold,
           color: context.surfaceColor,
         ),
-        actions: [Padding(
-          padding: const EdgeInsets.only(right: 5.0),
-          child: NotificationBadge(iconColor: Colors.white),
-        )],
+        actions: const [
+          Padding(
+            padding: EdgeInsets.only(right: 5.0),
+            child: NotificationBadge(
+              iconColor: Colors.white,
+            ),
+          ),
+        ],
         iconTheme: IconThemeData(
-          color: context
-              .surfaceColor, // Pon el color que desees (ej: blanco, dorado, etc.)
-          size: 28, // Opcional: por si quieres cambiar su tamaño
+          color: context.surfaceColor,
+          size: 28,
         ),
-
         backgroundColor: context.primaryColor,
         foregroundColor: context.textColor,
         elevation: 0,
@@ -113,28 +136,71 @@ class _AdminDashboardState extends State<AdminDashboard> {
       child: Column(
         children: [
           UserAccountsDrawerHeader(
-            decoration: BoxDecoration(color: context.primaryColor),
+            decoration: BoxDecoration(
+              color: context.primaryColor,
+            ),
             currentAccountPicture: const CircleAvatar(
               backgroundColor: Colors.white,
-              child: Icon(Icons.gavel, color: Colors.blue, size: 40),
+              child: Icon(
+                Icons.gavel,
+                color: Colors.blue,
+                size: 40,
+              ),
             ),
             accountName: const Text("Panel Administrativo"),
             accountEmail: const Text("Gestión de Inmuebles"),
           ),
-          _drawerItem(Icons.assignment, "Solicitudes Pendientes", 'contracts'),
+
+          _drawerItem(
+            Icons.assignment,
+            "Solicitudes Pendientes",
+            'contracts',
+          ),
+
           _drawerItem(
             Icons.verified_user_rounded,
             "Contratos Formalizados",
             'final_contracts',
           ),
-          _drawerItem(Icons.home_work, "Inmuebles", 'properties'),
-          _drawerItem(Icons.people, "Usuarios", 'users'),
-          _drawerItem(Icons.calendar_month, "Agenda General", 'appointments'),
-          _drawerItem(Icons.settings, "Configuración", 'config'),
+
+          _drawerItem(
+            Icons.draw,
+            "Pruebas Firma Digital",
+            'viafirma_test',
+          ),
+
+          _drawerItem(
+            Icons.home_work,
+            "Inmuebles",
+            'properties',
+          ),
+
+          _drawerItem(
+            Icons.people,
+            "Usuarios",
+            'users',
+          ),
+
+          _drawerItem(
+            Icons.calendar_month,
+            "Agenda General",
+            'appointments',
+          ),
+
+          _drawerItem(
+            Icons.settings,
+            "Configuración",
+            'config',
+          ),
+
           const Spacer(),
           const Divider(),
+
           ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
+            leading: const Icon(
+              Icons.logout,
+              color: Colors.red,
+            ),
             title: Text(
               "Cerrar Sesión",
               style: TextStyle(
@@ -143,20 +209,33 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
             ),
             onTap: () {
-              context.read<NotificationBloc>().add(const ClearUserToken());
-              context.read<AuthBloc>().add(LogOutRequested());
+              context.read<NotificationBloc>().add(
+                    const ClearUserToken(),
+                  );
+              context.read<AuthBloc>().add(
+                    LogOutRequested(),
+                  );
             },
           ),
+
           const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  Widget _drawerItem(IconData icon, String title, String view) {
-    bool isSelected = _currentView == view;
+  Widget _drawerItem(
+    IconData icon,
+    String title,
+    String view,
+  ) {
+    final bool isSelected = _currentView == view;
+
     return ListTile(
-      leading: Icon(icon, color: isSelected ? Colors.blue[900] : Colors.grey),
+      leading: Icon(
+        icon,
+        color: isSelected ? Colors.blue[900] : Colors.grey,
+      ),
       title: Text(
         title,
         style: TextStyle(
@@ -166,18 +245,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
       ),
       selected: isSelected,
       onTap: () {
-        setState(() => _currentView = view);
+        setState(() {
+          _currentView = view;
+        });
+
         Navigator.pop(context);
       },
     );
   }
 
-  Widget _buildEmptyState(IconData icon, String message) {
+  Widget _buildEmptyState(
+    IconData icon,
+    String message,
+  ) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 80, color: Colors.grey[300]),
+          Icon(
+            icon,
+            size: 80,
+            color: Colors.grey[300],
+          ),
           const SizedBox(height: 16),
           Text(
             message,

@@ -54,6 +54,8 @@ class _PropertyPaymentScreenState extends State<PropertyPaymentScreen> {
         screenshotPath: _localScreenshotPath!,
       ),
     );
+
+    
   }
 
   Future<void> _pickScreenshot() async {

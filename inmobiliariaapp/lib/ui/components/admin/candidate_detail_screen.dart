@@ -5,6 +5,7 @@ import 'package:inmobiliariaapp/models/candidate_model.dart';
 import 'package:inmobiliariaapp/services/application_service.dart';
 import 'package:inmobiliariaapp/services/contract_service.dart';
 import 'package:inmobiliariaapp/ui/components/admin/candidate_profile_header.dart';
+import 'package:inmobiliariaapp/ui/components/global/custom_button.dart';
 import 'package:inmobiliariaapp/ui/components/pdf/Pdf_view_screen.dart';
 import 'package:inmobiliariaapp/utils/themes.dart';
 import 'package:inmobiliariaapp/ui/components/global/custom_text.dart';
@@ -223,45 +224,39 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
   Widget _buildActionButtons(BuildContext context) {
     return Row(
       children: [
+        // 1. BOTÓN DE RECHAZAR (Estilo Outline / Borde Rojo)
         Expanded(
-          child: OutlinedButton.icon(
-            icon: const Icon(Icons.close_rounded, size: 18),
-            label: const Text("RECHAZAR"),
+          child: CustomButton(
             onPressed: () => _showDecisionDialog(context, 'rejected'),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              foregroundColor: Colors.redAccent,
-              side: const BorderSide(color: Colors.redAccent, width: 1.5),
-              textStyle: const TextStyle(
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
+            isLoading:
+                false, // Conéctalo a tu variable de carga si es necesario (ej: _isRejecting)
+            height: ResponsiveUtils.getHeight(context, 5.5),
+        
+            childText: CustomText(
+              "RECHAZAR",
+              baseFontSize: ResponsiveUtils.getFontSize(context, 14),
+              fontWeight: FontWeight.bold,
+              color: context.textColorWhite,
             ),
           ),
         ),
+
         const SizedBox(width: 16),
+
+        // 2. BOTÓN DE APROBAR (Estilo Sólido Verde)
         Expanded(
-          child: ElevatedButton.icon(
-            icon: const Icon(Icons.check_rounded, size: 18),
-            label: const Text("APROBAR"),
+          child: CustomButton(
             onPressed: () => _showDecisionDialog(context, 'approved'),
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              backgroundColor: Colors.green[700],
-              foregroundColor: Colors.white,
-              elevation: 0,
-              textStyle: const TextStyle(
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.bold,
-                fontSize: 13,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
-              ),
+            isLoading:
+                false, // Conéctalo a tu variable de carga si es necesario (ej: _isApproving)
+     
+
+            height: ResponsiveUtils.getHeight(context, 5.5),
+            childText: CustomText(
+              "APROBAR",
+              baseFontSize: ResponsiveUtils.getFontSize(context, 14),
+              fontWeight: FontWeight.bold,
+              color: context.textColorWhite,
             ),
           ),
         ),
@@ -295,6 +290,12 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
 
           return AlertDialog(
             backgroundColor: context.surfaceColor,
+            // === AQUÍ SE LOGRA EL ANCHO AMPLIO ===
+            // Reducimos el margen horizontal a solo 16 o 20 para que use casi toda la pantalla disponible
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 24,
+            ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(22),
             ),
@@ -310,158 +311,162 @@ class _CandidateDetailScreenState extends State<CandidateDetailScreen> {
                 const SizedBox(width: 10),
                 CustomText.title(
                   isApproval ? "Aprobar Inquilino" : "Rechazar Candidato",
-                  baseFontSize: 16,
+                  baseFontSize: ResponsiveUtils.getFontSize(context, 18),
                   fontWeight: FontWeight.w900,
                 ),
               ],
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (isApproval)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withOpacity(0.04),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(
-                          color: Colors.amber.withOpacity(0.2),
+            content: SizedBox(
+              // Obligamos al contenido a estirarse al máximo ancho de la pantalla calculado por el insetPadding
+              width: MediaQuery.of(context).size.width,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isApproval)
+                      Container(
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: Colors.amber.withOpacity(0.2),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.warning_amber_rounded,
+                              color: Colors.amber[900],
+                              size: 18,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: CustomText(
+                                "Al aprobar este candidato, los demás postulantes serán rechazados automáticamente.",
+                                baseFontSize: ResponsiveUtils.getFontSize(context, 14),
+                                fontWeight: FontWeight.w600,
+                                color: Colors.amber[900],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.warning_amber_rounded,
-                            color: Colors.amber[900],
-                            size: 18,
+                    CustomText(
+                      "Etiquetas de respuesta rápida:",
+                      baseFontSize: ResponsiveUtils.getFontSize(context, 14),
+                      fontWeight: FontWeight.w800,
+                      color: context.textSecondaryColor.withOpacity(0.7),
+                    ),
+                    const SizedBox(height: 10),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: quickNotes.map((note) {
+                        bool isSelected = selectedQuickNote == note;
+                        return ChoiceChip(
+                          label: Text(note),
+                          labelStyle: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: ResponsiveUtils.getFontSize(context, 14),
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isSelected
+                                ? Colors.white
+                                : context.textColor,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: CustomText(
-                              "Al aprobar este candidato, los demás postulantes serán rechazados automáticamente.",
-                              baseFontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.amber[900],
+                          selected: isSelected,
+                          selectedColor: _getStatusColor(status),
+                          backgroundColor: context.textColor.withOpacity(0.03),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                            side: BorderSide(
+                              color: isSelected
+                                  ? Colors.transparent
+                                  : context.textColor.withOpacity(0.05),
                             ),
                           ),
-                        ],
-                      ),
+                          onSelected: (val) {
+                            setDialogState(() {
+                              selectedQuickNote = val ? note : "";
+                              noteController.text = selectedQuickNote;
+                            });
+                          },
+                        );
+                      }).toList(),
                     ),
-                  CustomText(
-                    "Etiquetas de respuesta rápida:",
-                    baseFontSize: 12,
-                    fontWeight: FontWeight.w800,
-                    color: context.textSecondaryColor.withOpacity(0.7),
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: quickNotes.map((note) {
-                      bool isSelected = selectedQuickNote == note;
-                      return ChoiceChip(
-                        label: Text(note),
-                        labelStyle: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 12,
-                          fontWeight: isSelected
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                          color: isSelected ? Colors.white : context.textColor,
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: noteController,
+                      maxLines: 3,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        color: context.textColor,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: "Escribe un mensaje personalizado...",
+                        hintStyle: TextStyle(
+                          color: context.textSecondaryColor.withOpacity(0.35),
+                          fontSize: 13,
                         ),
-                        selected: isSelected,
-                        selectedColor: _getStatusColor(status),
-                        backgroundColor: context.textColor.withOpacity(0.03),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          side: BorderSide(
-                            color: isSelected
-                                ? Colors.transparent
-                                : context.textColor.withOpacity(0.05),
+                        filled: true,
+                        fillColor: context.textColor.withOpacity(0.01),
+                        contentPadding: const EdgeInsets.all(14),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: context.textColor.withOpacity(0.06),
+                            width: 1.5,
                           ),
                         ),
-                        showCheckmark: false,
-                        onSelected: (val) {
-                          setDialogState(() {
-                            selectedQuickNote = val ? note : "";
-                            noteController.text = selectedQuickNote;
-                          });
-                        },
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: noteController,
-                    maxLines: 3,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 14,
-                      color: context.textColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    decoration: InputDecoration(
-                      hintText: "Escribe un mensaje personalizado...",
-                      hintStyle: TextStyle(
-                        color: context.textSecondaryColor.withOpacity(0.35),
-                        fontSize: 13,
-                      ),
-                      filled: true,
-                      fillColor: context.textColor.withOpacity(0.01),
-                      contentPadding: const EdgeInsets.all(14),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(
-                          color: context.textColor.withOpacity(0.06),
-                          width: 1.5,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide(
-                          color: _getStatusColor(status),
-                          width: 2,
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(
+                            color: _getStatusColor(status),
+                            width: 2,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
             actionsPadding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
             actions: [
-              CustomTextButton.muted(
-                "CANCELAR",
-                onPressed: () => Navigator.pop(context),
-              ),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _updateStatus(status, noteController.text.trim());
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _getStatusColor(status),
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 12,
+              Row(
+                children: [
+                  Expanded(
+                    child: CustomTextButton.muted(
+                      "CANCELAR",
+                      onPressed: () => Navigator.pop(context),
+                    ),
                   ),
-                  textStyle: const TextStyle(
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    letterSpacing: 0.2,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    // === REEMPLAZADO CON TU CUSTOMBUTTON GLOBAL DE LA APP ===
+                    child: CustomButton(
+                      height: 44, // Un tamaño ideal para botones de diálogo
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _updateStatus(status, noteController.text.trim());
+                      },
+                   
+                      childText: const CustomText(
+                        "CONFIRMAR",
+                        baseFontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white,
+                      ),
+                    ),
                   ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text("CONFIRMAR"),
+                ],
               ),
             ],
           );

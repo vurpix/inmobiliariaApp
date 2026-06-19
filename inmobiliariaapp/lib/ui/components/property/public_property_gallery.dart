@@ -13,6 +13,7 @@ import 'package:inmobiliariaapp/enum/property_status.dart';
 import 'package:inmobiliariaapp/models/application_model.dart';
 import 'package:inmobiliariaapp/models/property_model.dart';
 import 'package:inmobiliariaapp/models/contract_model.dart';
+import 'package:inmobiliariaapp/models/signature/signature_party_model.dart';
 import 'package:inmobiliariaapp/models/story_model.dart';
 import 'package:inmobiliariaapp/services/application_service.dart';
 import 'package:inmobiliariaapp/services/contract_service.dart';
@@ -69,22 +70,26 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
                 )
                 .toList();
 
-            // 2. CORREGIDO: Ahora incluye la evaluación de rechazo con validación de URL nula
+            // 2. ADAPTADO AL BACKEND: Evaluación por UID del mapa reactivo 'signaturesTracking'
             final myPendingSignatureContract = allContracts
                 .cast<ContractModel?>()
                 .firstWhere((c) {
                   if (c == null || c.tenant?.uid != userId) return false;
 
-                  // Caso A: Esperando firma inicial del inquilino
-                  final bool isWaitingSign =
-                      c.status == ContractStatus.waitingTenantSignature.name;
+                  // 🌟 CAMBIO: Ahora accedes de forma nativa a través del modelo tipado
+                  if (c.signaturesTracking != null &&
+                      c.signaturesTracking!.containsKey(userId)) {
+                    // Accedemos directo al objeto de tipo SignaturePartyModel
+                    final SignaturePartyModel tenantTracking =
+                        c.signaturesTracking![userId]!;
 
-                  // Caso C: El documento fue rechazado Y el inquilino limpió o no ha subido el nuevo PDF
-                  final bool isRejectedAndEmpty =
-                      c.status == ContractStatus.signatureRejected.name &&
-                      c.tenantSignedPdfUrl == null;
+                    // Retornamos true si está pendiente o rechazado
+                    return tenantTracking.status == 'PENDING' ||
+                        tenantTracking.status == 'REJECTED';
+                  }
 
-                  return isWaitingSign || isRejectedAndEmpty;
+                  // Sistema de respaldo por si no se ha sincronizado el mapa
+                  return c.status == ContractStatus.waitingTenantSignature.name;
                 }, orElse: () => null);
 
             // --- ESCENARIO A: MUESTRA LA VISTA DE MIS INMUEBLES (MODULAR) ---
@@ -101,10 +106,13 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
                     color: Colors.white,
                   ),
                   elevation: 0,
-
-                  actions: [NotificationBadge(iconColor: Colors.white)],
+                  actions: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8.0),
+                      child: NotificationBadge(iconColor: Colors.white),
+                    ),
+                  ],
                 ),
-
                 drawer: GalleryNavigationDrawer(
                   hasAssignedResidence: true,
                   isAuthenticated: isAuthenticated,
@@ -134,7 +142,12 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
                 backgroundColor: context.primaryColor,
                 iconTheme: const IconThemeData(color: Colors.white),
                 elevation: 0,
-                actions: [NotificationBadge(iconColor: Colors.white)],
+                actions: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8.0),
+                    child: NotificationBadge(iconColor: Colors.white),
+                  ),
+                ],
                 title: CustomText(
                   isAuthenticated
                       ? "Hola, ${userName?.split(' ')[0]}"
@@ -153,7 +166,7 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
               ),
               body: Column(
                 children: [
-                  if (myPendingSignatureContract != null)
+                  if (myPendingSignatureContract != null )
                     PendingSignatureBanner(
                       contract: myPendingSignatureContract,
                     ),
@@ -235,7 +248,6 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
     );
   }
 
-  // --- COMPONENTE BARRA DE HISTORIAS INFORMÁTICAS INDEPENDIENTES ---
   Widget _buildStoriesSection() {
     return StreamBuilder<QuerySnapshot>(
       stream: FirebaseFirestore.instance
@@ -262,8 +274,6 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
             itemBuilder: (context, index) {
               final story = storiesList[index];
 
-              // Comprobación de existencia de miniatura personalizada en tu StoryModel
-              // Si no tienes este campo en el modelo, resolverá automáticamente el icono por defecto.
               final String? thumbnailUrl =
                   (story as dynamic).toMap().containsKey('thumbnailUrl')
                   ? (story as dynamic).thumbnailUrl
@@ -286,7 +296,6 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
                   padding: const EdgeInsets.only(right: 14.0),
                   child: Column(
                     children: [
-                      // Anillo exterior con degradado dinámico (Estilo Instagram)
                       Container(
                         padding: const EdgeInsets.all(2.5),
                         decoration: BoxDecoration(
@@ -312,7 +321,6 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
                             backgroundColor: context.primaryColor.withOpacity(
                               0.08,
                             ),
-                            // --- MANEJO INTELIGENTE DE MINIATURA O ICONO ---
                             backgroundImage:
                                 thumbnailUrl != null && thumbnailUrl.isNotEmpty
                                 ? NetworkImage(thumbnailUrl)
@@ -322,7 +330,6 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
                               height: double.infinity,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                // Si hay miniatura, oscurece un poco el fondo para que el icono blanco resalte
                                 color:
                                     thumbnailUrl != null &&
                                         thumbnailUrl.isNotEmpty
@@ -451,7 +458,7 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
                       vertical: 6,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF2E7D32),
+                      color: context.successColor,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Text(
@@ -482,7 +489,9 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
                             isFav
                                 ? Icons.favorite
                                 : Icons.favorite_border_rounded,
-                            color: isFav ? Colors.redAccent : Colors.grey[600],
+                            color: isFav
+                                ? context.errorColor
+                                : Colors.grey[600],
                             size: 20,
                           ),
                           onPressed: () => isAuth
@@ -523,6 +532,49 @@ class _PublicPropertyGalleryState extends State<PublicPropertyGallery> {
                         color: context.primaryColor,
                         fontWeight: FontWeight.w800,
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.square_foot_rounded,
+                        size: 15,
+                        color: context.textSecondaryColor.withOpacity(0.6),
+                      ),
+                      const SizedBox(width: 4),
+                      CustomText(
+                        "${property.area} m²",
+                        baseFontSize: 12,
+                        color: context.textSecondaryColor.withOpacity(0.6),
+                      ),
+                      if (property.hasAdmin) ...[
+                        const SizedBox(width: 16),
+                        Icon(
+                          Icons.gavel_rounded,
+                          size: 15,
+                          color: context.textSecondaryColor.withOpacity(0.6),
+                        ),
+                        const SizedBox(width: 4),
+                        CustomText(
+                          "Admin: ${(property.adminPrice as num).toInt().toCOP()}",
+                          baseFontSize: 12,
+                          color: context.textSecondaryColor.withOpacity(0.6),
+                        ),
+                      ] else ...[
+                        const SizedBox(width: 16),
+                        Icon(
+                          Icons.gavel_rounded,
+                          size: 15,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(width: 4),
+                        CustomText(
+                          "Sin administración",
+                          baseFontSize: 12,
+                          color: context.textSecondaryColor.withOpacity(0.6),
+                        ),
+                      ],
                     ],
                   ),
                   const SizedBox(height: 4),

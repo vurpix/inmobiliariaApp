@@ -1,4 +1,6 @@
+// lib/services/contract_service.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:inmobiliariaapp/enum/property_status.dart';
 import 'package:inmobiliariaapp/models/candidate_model.dart';
 import '../models/contract_model.dart';
@@ -7,22 +9,36 @@ class ContractService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final String _collection = 'contracts';
 
-  // --- 1. SECCIÓN DE LECTURA (STREAMS Y FUTURES) ---
+  // --- 1. SECCIÓN DE LECTURA (STREAMS Y FUTURES TOTALMENTE TIPADOS) ---
 
-  // Escucha todos los contratos ordenados por fecha
-  Stream<List<ContractModel>> watchAllContracts() {
+  /// Escucha todos los contratos ordenados por fecha (Viafirma mapeado automáticamente)
+ Stream<List<ContractModel>> watchAllContracts() {
     return _db
         .collection(_collection)
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map(
-          (snapshot) => snapshot.docs
-              .map((doc) => ContractModel.fromSnapshot(doc))
-              .toList(),
-        );
+        .map((snapshot) {
+          final List<ContractModel> contracts = [];
+          
+          for (var doc in snapshot.docs) {
+            try {
+              // Intentamos mapear el contrato de forma normal
+              contracts.add(ContractModel.fromSnapshot(doc));
+            } catch (e) {
+              // 🔍 SI UN CONTRATO VIEJO TIENE ERRORES, ESTO TE AVISARÁ EN CONSOLA
+              // pero NO romperá la aplicación ni bloqueará a los demás contratos.
+              debugPrint("⚠️ [CONTRACT SERVICE ERROR] Error al mapear el documento ID: ${doc.id}. Motivo: $e");
+              
+              // Opcional: Puedes meter un contrato "falso/boceto" o simplemente saltártelo
+              // para que la pantalla siga cargando los contratos que sí están bien.
+            }
+          }
+          
+          return contracts;
+        });
   }
 
-  // Escucha el contrato de una propiedad específica (Stream reactivo)
+  /// Escucha el contrato de una propiedad específica (Stream reactivo y limpio)
   Stream<ContractModel?> watchContractByProperty(String propertyId) {
     return _db
         .collection(_collection)
@@ -36,7 +52,7 @@ class ContractService {
         });
   }
 
-  // Carga inicial de datos de contrato
+  /// Carga inicial de datos de contrato bajo demanda en formato Future
   Future<ContractModel?> getContractData(String propertyId) async {
     final query = await _db
         .collection(_collection)
@@ -50,10 +66,28 @@ class ContractService {
     return null;
   }
 
+  /// Obtiene un contrato por ID de propiedad (Mapeo unificado)
+  Future<ContractModel?> getContractByProperty(String propertyId) async {
+    try {
+      final querySnapshot = await _db
+          .collection(_collection)
+          .where('propertyId', isEqualTo: propertyId)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isNotEmpty) {
+        return ContractModel.fromSnapshot(querySnapshot.docs.first);
+      }
+      return null;
+    } catch (e) {
+      print("❌ Error obteniendo contrato: $e");
+      return null;
+    }
+  }
+
   // --- 2. SECCIÓN DE ESCRITURA Y ACTUALIZACIÓN ---
 
-  // NUEVO: Método para inicializar el contrato cuando el abogado sube el borrador
-  // Maneja la creación si no existe o actualización si ya existe.
+  /// Inicializa o actualiza un contrato usando el mapeo fuertemente tipado .toMap()
   Future<void> saveInitialContract(ContractModel contract) async {
     await _db
         .collection(_collection)
@@ -61,7 +95,7 @@ class ContractService {
         .set(contract.toMap(), SetOptions(merge: true));
   }
 
-  // Finaliza el proceso de carga de documentos del inquilino
+  /// Finaliza el proceso de carga de documentos del inquilino
   Future<void> finalizeContractDocuments({
     required String contractId,
     required String idDocumentUrl,
@@ -76,27 +110,7 @@ class ContractService {
     });
   }
 
-  Future<ContractModel?> getContractByProperty(String propertyId) async {
-    try {
-      final querySnapshot = await _db
-          .collection(
-            'contracts',
-          ) // Asegúrate de que el nombre sea igual a tu colección
-          .where('propertyId', isEqualTo: propertyId)
-          .limit(1)
-          .get();
-
-      if (querySnapshot.docs.isNotEmpty) {
-        return ContractModel.fromSnapshot(querySnapshot.docs.first);
-      }
-      return null;
-    } catch (e) {
-      print("Error obteniendo contrato: $e");
-      return null;
-    }
-  }
-
-  // Actualizar solo el estado
+  /// Actualizar solo el token de estado de un contrato
   Future<void> updateContractStatus(String contractId, String newStatus) async {
     await _db.collection(_collection).doc(contractId).update({
       'status': newStatus,
@@ -104,7 +118,7 @@ class ContractService {
     });
   }
 
-  // Aprobación de candidato: Vincula al inquilino con el contrato
+  /// Aprobación de candidato: Vincula al inquilino con el contrato usando un lote atómico (Batch)
   Future<void> approveCandidateProcess({
     required String propertyId,
     required String candidateUid,
@@ -131,7 +145,7 @@ class ContractService {
       return;
     }
 
-    // --- LÓGICA DE AUTO-RECHAZO ---
+    // 3. LÓGICA DE AUTO-RECHAZO PARA LOS DEMÁS CANDIDATOS
     final List<CandidateModel> finalCandidatesList = updatedCandidates.map((c) {
       if (c.uid == winner!.uid) {
         return c;
@@ -144,9 +158,7 @@ class ContractService {
     WriteBatch batch = _db.batch();
 
     // Actualizar Aplicaciones
-    DocumentReference appRef = _db
-        .collection('applications')
-        .doc(applicationDocId);
+    DocumentReference appRef = _db.collection('applications').doc(applicationDocId);
     batch.update(appRef, {
       'candidates': finalCandidatesList.map((c) => c.toMap()).toList(),
       'lastUpdate': FieldValue.serverTimestamp(),
@@ -177,11 +189,7 @@ class ContractService {
       });
     } else {
       // --- CREAR CONTRATO NUEVO ---
-      // Obtenemos datos de la propiedad para que el contrato no nazca vacío
-      final propertySnap = await _db
-          .collection('properties')
-          .doc(propertyId)
-          .get();
+      final propertySnap = await _db.collection('properties').doc(propertyId).get();
 
       if (propertySnap.exists) {
         final propData = propertySnap.data()!;
@@ -192,36 +200,49 @@ class ContractService {
           'propertyId': propertyId,
           'ownerId': propData['ownerId'] ?? '',
           'address': propData['address'] ?? '',
-          'canonAmount': propData['canon'] ?? 0.0,
-          'duration':
-              "${propData['durationValue']} ${propData['durationUnit']}",
+          'canonAmount': (propData['canon'] ?? 0.0).toDouble(),
+          'duration': "${propData['durationValue']} ${propData['durationUnit']}",
           'tenant': winner.toMap(),
           'ownerSignedPdfUrl': null,
           'rejectionReason': null,
           'tenantSignedPdfUrl': null, 
           'status': PropertyStatusEnum.approvedPendingPayment.name,
+          // Propiedades de inicialización seguras de Viafirma mapeadas por UID
+          'signatureStatus': 'created',
+          'signaturesTracking': {
+            winner.uid: {
+              'uid': winner.uid,
+              'role': 'tenant',
+              'email': winner.email,
+              'status': 'PENDING',
+            },
+            (propData['ownerId'] ?? ''): {
+              'uid': (propData['ownerId'] ?? ''),
+              'role': 'owner',
+              'email': '', // El backend resolverá el correo real al activar el trigger
+              'status': 'PENDING',
+            }
+          },
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
-          'baseContractPdfUrl': null, // Lo subirá el abogado después
+          'baseContractPdfUrl': null, 
         });
       }
     }
 
     // 6. ACTUALIZAR ESTADO DE LA PROPIEDAD
-    // La propiedad pasa a un estado donde el admin sabe que debe subir el PDF
     DocumentReference propRef = _db.collection('properties').doc(propertyId);
     batch.update(propRef, {
       'status': PropertyStatusEnum.approvedPendingPayment.name,
       'updatedAt': FieldValue.serverTimestamp(),
     });
 
-    // 7. EJECUTAR BATCH
+    // 7. EJECUTAR BATCH EN UN SOLO VIAJE DE RED
     await batch.commit();
-
     print("✅ Proceso completado: Inquilino vinculado y contrato preparado.");
   }
 
-  // Sube el contrato firmado por el inquilino y actualiza la propiedad
+  /// Sube el contrato firmado por el inquilino y actualiza la propiedad
   Future<void> submitSignedContract({
     required String contractId,
     required String propertyId,
@@ -238,9 +259,7 @@ class ContractService {
     });
 
     // 2. Actualizar la propiedad
-    DocumentReference propertyRef = _db
-        .collection('properties')
-        .doc(propertyId);
+    DocumentReference propertyRef = _db.collection('properties').doc(propertyId);
     batch.update(propertyRef, {
       'status': 'signedPendingReview',
       'updatedAt': FieldValue.serverTimestamp(),
@@ -249,28 +268,18 @@ class ContractService {
     await batch.commit();
   }
 
-  // --- 3. SECCIÓN DINÁMICA Y UTILIDADES ---
-
-  // Actualizar cualquier campo flexible
-  Future<void> updateFields(
-    String contractId,
-    Map<String, dynamic> data,
-  ) async {
-    // 1. Obtenemos la referencia del contrato
+  /// Actualizar cualquier campo flexible de forma segura manejando la conversión a mapa tipado
+  Future<void> updateFields(String contractId, Map<String, dynamic> data) async {
     DocumentReference contractRef = _db.collection(_collection).doc(contractId);
 
-    // 2. Si el estado que estamos enviando es 'active', debemos desactivar la propiedad
+    // Si el estado que estamos enviando es 'active', debemos pasar la propiedad a ocupada
     if (data['status'] == 'active') {
       WriteBatch batch = _db.batch();
-
-      // Obtenemos el documento del contrato para sacar el propertyId
       DocumentSnapshot contractSnap = await contractRef.get();
 
       if (contractSnap.exists) {
         String propertyId = contractSnap.get('propertyId');
-        DocumentReference propertyRef = _db
-            .collection('properties')
-            .doc(propertyId);
+        DocumentReference propertyRef = _db.collection('properties').doc(propertyId);
 
         // A. Actualizamos el contrato
         batch.update(contractRef, {
@@ -278,9 +287,9 @@ class ContractService {
           'updatedAt': FieldValue.serverTimestamp(),
         });
 
-        // B. Actualizamos la propiedad a 'inactive' (ya arrendada)
+        // B. Actualizamos la propiedad a 'inactive' (ya arrendada y fuera de la galería)
         batch.update(propertyRef, {
-          'status': 'inactive', // O el estado que uses para "Ocupado"
+          'status': 'inactive', 
           'updatedAt': FieldValue.serverTimestamp(),
         });
 
@@ -289,14 +298,14 @@ class ContractService {
       }
     }
 
-    // 3. Si no es una activación final, solo actualizamos los campos del contrato normalmente
+    // Si no es una activación final, solo actualizamos los campos del contrato normalmente
     await contractRef.update({
       ...data,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
 
-  // Simular la firma del contrato (Pruebas)
+  /// Simular la firma del contrato (Flujos de Pruebas del Entorno)
   Future<void> simulateSignature(String ownerId) async {
     final query = await _db
         .collection(_collection)

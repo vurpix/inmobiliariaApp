@@ -36,6 +36,7 @@ const PropertyStatusEnum = Object.freeze({
   waitingSignature: "waitingSignature", // Propietario debe firmar
   signedPendingReview: "signedPendingReview", // Admin debe revisar firma
   signatureRejected: "signatureRejected", // Firma rechazada
+  signatureRejectedTenant: "signatureRejectedTenant", // Firma rechazada
   active: "active",
   pendingActivation: "pendingActivation", // Propiedad pendiente de reactivación
   inactive: "inactive",

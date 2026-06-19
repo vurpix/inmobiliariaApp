@@ -146,28 +146,31 @@ class _PriceScalesConfigSectionState extends State<PriceScalesConfigSection> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
-                            IconButton(
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              icon: const Icon(
-                                Icons.edit_note_rounded,
-                                color: Colors.blue,
-                                size: 20,
+                            Expanded(
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                icon: const Icon(
+                                  Icons.edit_note_rounded,
+                                  color: Colors.blue,
+                                  size: 20,
+                                ),
+                                onPressed: () =>
+                                    _showScaleEditDialog(scales, index),
                               ),
-                              onPressed: () =>
-                                  _showScaleEditDialog(scales, index),
                             ),
-                            const Spacer(),
-                            IconButton(
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              icon: const Icon(
-                                Icons.delete_outline_rounded,
-                                color: Colors.redAccent,
-                                size: 18,
+                            Expanded(
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                icon: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  color: Colors.redAccent,
+                                  size: 18,
+                                ),
+                                onPressed: () =>
+                                    _showDeleteConfirmDialog(scales, index),
                               ),
-                              onPressed: () =>
-                                  _showDeleteConfirmDialog(scales, index),
                             ),
                           ],
                         ),

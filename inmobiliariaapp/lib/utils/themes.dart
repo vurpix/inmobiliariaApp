@@ -13,7 +13,7 @@ class AppThemes {
   static const Color textColorLight = Color(0xFF181C1E);       // On-Surface
   static const Color textSecondaryLight = Color(0xFF43474E);   // On-Surface Variant
   static const Color errorColorLight = Color(0xFFBA1A1A);
-  static const Color successColorLight = Color(0xFF38A169);    // Green listing status
+  static const Color successColorLight = Color(0xFF19a337);    // Green listing status
 
   // ==========================================
   // PALETA OSCURA (Mapeada de "Obsidian Estate")
@@ -26,7 +26,7 @@ class AppThemes {
   static const Color textColorDark = Color(0xFFF8FAFC);
   static const Color textSecondaryDark = Color(0xFF94A3B8);
   static const Color errorColorDark = Color(0xFFF87171);
-  static const Color successColorDark = Color(0xFF10B981);
+  static const Color successColorDark = Color(0xFF19a337);
 
   // --- TEMA CLARO NATIVO (MATERIAL 3) ---
   static ThemeData lightTheme = ThemeData(
@@ -172,8 +172,10 @@ class AppThemes {
   static Color getSecondaryColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? secondaryColorDark : secondaryColorLight;
   static Color getTertiaryColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? tertiaryColorDark : tertiaryColorLight;
   static Color getBackgroundColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? backgroundColorDark : backgroundColorLight;
+  static Color getBackgroundColorDark(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? backgroundColorLight : backgroundColorDark;
   static Color getSurfaceColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? surfaceColorDark : surfaceColorLight;
   static Color getTextColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? textColorDark : textColorLight;
+  static Color getTextColorWhite(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? textColorLight : textColorDark;
   static Color getTextSecondaryColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? textSecondaryDark : textSecondaryLight;
   static Color getErrorColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? errorColorDark : errorColorLight;
   static Color getSuccessColor(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? successColorDark : successColorLight;
@@ -184,8 +186,10 @@ extension ThemeColors on BuildContext {
   Color get secondaryColor => AppThemes.getSecondaryColor(this);
   Color get tertiaryColor => AppThemes.getTertiaryColor(this);
   Color get backgroundColor => AppThemes.getBackgroundColor(this);
+  Color get backgroundColorDark => AppThemes.getBackgroundColorDark(this);
   Color get surfaceColor => AppThemes.getSurfaceColor(this);
   Color get textColor => AppThemes.getTextColor(this);
+  Color get textColorWhite => AppThemes.getTextColorWhite(this);
   Color get textSecondaryColor => AppThemes.getTextSecondaryColor(this);
   Color get errorColor => AppThemes.getErrorColor(this);
   Color get successColor => AppThemes.getSuccessColor(this);

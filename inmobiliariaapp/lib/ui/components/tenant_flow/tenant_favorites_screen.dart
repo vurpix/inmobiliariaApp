@@ -239,26 +239,45 @@ class TenantFavoritesScreen extends StatelessWidget {
                       Icon(
                         Icons.square_foot_rounded,
                         size: 15,
-                        color: context.textSecondaryColor.withOpacity(0.5),
+                        color: context.textSecondaryColor.withOpacity(0.6),
                       ),
                       const SizedBox(width: 4),
                       CustomText(
                         "${property.area} m²",
                         baseFontSize: 12,
-                        color: context.textSecondaryColor.withOpacity(0.8),
+                        color: context.textSecondaryColor.withOpacity(0.6),
                       ),
                       if (property.hasAdmin) ...[
                         const SizedBox(width: 16),
                         Icon(
                           Icons.gavel_rounded,
                           size: 15,
-                          color: context.textSecondaryColor.withOpacity(0.5),
+                          color: context
+                              .textSecondaryColor, // 👈 Color plano seguro sin opacidad conflictiva
                         ),
                         const SizedBox(width: 4),
                         CustomText(
                           "Admin: ${(property.adminPrice as num).toInt().toCOP()}",
                           baseFontSize: 12,
-                          color: context.textSecondaryColor.withOpacity(0.8),
+                          color: context.textSecondaryColor.withOpacity(0.6),
+                        ),
+                      ] else ...[
+                        // 👈 AGREGAMOS EL ELSE AQUÍ
+                        const SizedBox(width: 16),
+                        Icon(
+                          Icons
+                              .gavel_rounded, // Puedes usar Icons.gavel_rounded o Icons.info_outline
+                          size: 15,
+                          color: Colors
+                              .grey[400], // Color gris tenue para indicar que no aplica
+                        ),
+                        const SizedBox(width: 4),
+                        CustomText(
+                          "Sin administración",
+                          baseFontSize: 12,
+                          color: context.textSecondaryColor.withOpacity(
+                            0.6,
+                          ), // Texto limpio y estático
                         ),
                       ],
                     ],
@@ -305,7 +324,8 @@ class TenantFavoritesScreen extends StatelessWidget {
                                     builder: (_) => TenantApplyScreen(
                                       propertyId: property.id ?? '',
                                       propertyAddress: property.address,
-                                      currentPropertyCanon: property.canon.toInt(),
+                                      currentPropertyCanon: property.canon
+                                          .toInt(),
                                     ),
                                   ),
                                 );

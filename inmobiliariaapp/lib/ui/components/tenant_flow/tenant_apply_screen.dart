@@ -56,7 +56,6 @@ class _TenantApplyScreenState extends State<TenantApplyScreen> {
   String _pdfFileName = "No se ha seleccionado PDF";
   String _imgFileName = "No se ha seleccionado Imagen";
 
-
   @override
   void initState() {
     super.initState();
@@ -79,7 +78,10 @@ class _TenantApplyScreenState extends State<TenantApplyScreen> {
       allowedExtensions: ['pdf'],
     );
 
-    if (result == null || result.files.single.path == null) return;
+    if (result == null || result.files.single.path == null) {
+      debugPrint("PDF cancelado o archivo inválido");
+      return;
+    }
 
     setState(() {
       _isUploadingPdf = true;
@@ -88,18 +90,52 @@ class _TenantApplyScreenState extends State<TenantApplyScreen> {
 
     try {
       final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        debugPrint("Error PDF: No hay usuario autenticado");
+        return;
+      }
+
+      debugPrint("UID actual: ${user.uid}");
+      debugPrint("Email actual: ${user.email}");
+
+      final file = result.files.single;
+      final pdfFile = File(file.path!);
+
       final storageRef = FirebaseStorage.instance
           .ref()
           .child('tenant_extracts_pdf')
-          .child('${user!.uid}_${DateTime.now().millisecondsSinceEpoch}.pdf');
+          .child(user.uid)
+          .child('${DateTime.now().millisecondsSinceEpoch}_${file.name}');
 
-      await storageRef.putFile(File(result.files.single.path!));
-      final url = await storageRef.getDownloadURL();
-      setState(() => _incomePdfUrl = url);
-    } catch (e) {
-      debugPrint("Error PDF: $e");
+      debugPrint("Subiendo PDF a: ${storageRef.fullPath}");
+
+      final uploadTask = await storageRef.putFile(
+        pdfFile,
+        SettableMetadata(contentType: 'application/pdf'),
+      );
+
+      final url = await uploadTask.ref.getDownloadURL();
+
+      debugPrint("PDF subido correctamente: $url");
+
+      setState(() {
+        _incomePdfUrl = url;
+      });
+    } on FirebaseException catch (e) {
+      debugPrint("Firebase Storage Error");
+      debugPrint("code: ${e.code}");
+      debugPrint("message: ${e.message}");
+      debugPrint("plugin: ${e.plugin}");
+    } catch (e, stack) {
+      debugPrint("Error PDF general: $e");
+      debugPrint("Stack: $stack");
     } finally {
-      setState(() => _isUploadingPdf = false);
+      if (mounted) {
+        setState(() {
+          _isUploadingPdf = false;
+        });
+      }
     }
   }
 

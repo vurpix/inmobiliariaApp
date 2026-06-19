@@ -62,6 +62,15 @@
 		<string>INSERT_REASON_HERE</string>
 		<key>NSPhotoLibraryAddUsageDescription</key>
 		<string>Necesitamos permiso para guardar el código QR en tu galería.</string>
+		<key>CFBundleURLTypes</key>
+		<array>
+			<dict>
+				<key>CFBundleURLSchemes</key>
+				<array>
+					<string>inmobiliariaapp</string>
+				</array>
+			</dict>
+		</array>
 		<key>LSApplicationQueriesSchemes</key>
 		<array>
 			<string>whatsapp</string>

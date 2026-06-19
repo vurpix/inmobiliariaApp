@@ -83,7 +83,6 @@ class PropertyService {
     if (paymentStatus != null) updateData['paymentStatus'] = paymentStatus;
 
     await _db.collection(_collection).doc(propertyId).update(updateData);
-
   }
 
   // Actualizar PDF del contrato legal (Subido por abogado/admin)
@@ -95,6 +94,27 @@ class PropertyService {
       'legalContractPdfUrl': downloadUrl,
       'updatedAt': FieldValue.serverTimestamp(),
     });
+  }
+
+  Future<void> updatePropertyFields({
+    required String propertyId,
+    required Map<String, dynamic> fieldsToUpdate,
+  }) async {
+    try {
+      // 1. Clonamos el mapa que enviaste para no modificar el original por referencia
+      final Map<String, dynamic> finalUpdateData = Map.from(fieldsToUpdate);
+
+      // 2. Le inyectamos la estampa de tiempo del servidor de Google de forma obligatoria
+      finalUpdateData['updatedAt'] = FieldValue.serverTimestamp();
+
+      // 3. Ejecutamos la actualización dinámica directa sobre el documento
+      await _db.collection(_collection).doc(propertyId).update(finalUpdateData);
+    } catch (e) {
+      // Es buena práctica capturar el error aquí por si el ID no existe o no hay internet
+      throw Exception(
+        "Error al actualizar campos dinámicos en la propiedad $propertyId: $e",
+      );
+    }
   }
 
   // Registrar pago de activación (Subido por Propietario)

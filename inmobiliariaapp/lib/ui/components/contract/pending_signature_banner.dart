@@ -15,15 +15,15 @@ class PendingSignatureBanner extends StatelessWidget {
   Widget build(BuildContext context) {
     // 1. EVALUACIÓN DE CONTROL: Detectamos si el documento fue rechazado por el abogado
     final bool isRejected =
-        contract.status == ContractStatus.signatureRejected.name;
+        contract.status == ContractStatus.signatureRejectedTenant.name;
 
     // 2. CONFIGURACIÓN VISUAL DINÁMICA
     final Color backgroundColor = isRejected
         ? context.errorColor
-        : Colors.green[600]!;
+        : context.successColor;
     final Color buttonForegroundColor = isRejected
         ? context.errorColor
-        : Colors.green[800]!;
+        : context.successColor;
     final IconData bannerIcon = isRejected
         ? Icons.gavel_rounded
         : Icons.assignment_turned_in_rounded;

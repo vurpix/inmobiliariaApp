@@ -206,17 +206,6 @@ class _AdminUsersViewState extends State<AdminUsersView> {
                                 AdminUserDetailScreen(user: user),
                           ),
                         );
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: CustomText(
-                              "Navegando al expediente de: ${user.name}",
-                              color: Colors.white,
-                            ),
-                            duration: const Duration(milliseconds: 600),
-                            backgroundColor: context.primaryColor,
-                          ),
-                        );
                       },
                       leading: CircleAvatar(
                         radius: 22,

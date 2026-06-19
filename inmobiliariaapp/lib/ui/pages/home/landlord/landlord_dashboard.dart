@@ -52,6 +52,8 @@ class _LandlordDashboardState extends State<LandlordDashboard> {
         return "PENDIENTE DE FIRMA";
       case PropertyStatusEnum.signatureRejected:
         return "FIRMA RECHAZADA";
+      case PropertyStatusEnum.signatureRejectedTenant:
+        return "FIRMA RECHAZADA";
       case PropertyStatusEnum.pendingActivation:
         return "PENDIENTE DE ACTIVACIÓN";
       case PropertyStatusEnum.active:

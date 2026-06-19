@@ -271,7 +271,7 @@ class _PossessionContractCardState extends State<PossessionContractCard> {
                                   await UserReviewDialog.show(
                                     context: context,
                                     targetUserId: widget.contract.ownerId,
-                                    targetUserName: 'PROPIETARIO',
+                                    targetUserName: 'Propietario',
                                     fromUserId: widget.userId,
                                     fromName: widget.userName,
                                     fromRole: UserRole.tenant.name,
@@ -333,7 +333,7 @@ class _PossessionContractCardState extends State<PossessionContractCard> {
                   child: Icon(
                     Icons.info_outline_rounded,
                     color: context.textSecondaryColor.withOpacity(0.6),
-                    size: 16,
+                    size: 18,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -341,7 +341,7 @@ class _PossessionContractCardState extends State<PossessionContractCard> {
                   flex: 9,
                   child: CustomText(
                     "El propietario aún no ha enviado tu calificación",
-                    baseFontSize: ResponsiveUtils.getFontSize(context, 10),
+                    baseFontSize: ResponsiveUtils.getFontSize(context, 14),
                     fontWeight: FontWeight.w600,
                     color: context.textSecondaryColor.withOpacity(0.6),
                   ),

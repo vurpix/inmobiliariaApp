@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:inmobiliariaapp/bloc/paymentBloc/payment_event.dart';
 import 'package:inmobiliariaapp/bloc/paymentBloc/payment_state.dart';
 import 'package:inmobiliariaapp/models/property_model.dart';
+import 'package:inmobiliariaapp/services/contract_service.dart';
 import 'package:inmobiliariaapp/services/property_repository.dart';
 import '../../enum/payment_status.dart';
 import '../../enum/property_status.dart';
@@ -110,7 +111,28 @@ class PaymentBloc extends Bloc<PaymentEvent, PaymentState> {
                   .name, // O .value según tu extensión
               'paymentStatus': PaymentStatusEnum.pendingVerify.name,
             });
+        final querySnapshot = await FirebaseFirestore.instance
+            .collection(
+              'contracts',
+            ) // Asegúrate de que coincida con tu nombre de colección
+            .where('propertyId', isEqualTo: event.propertyId)
+            .limit(1) // Solo necesitamos el contrato activo actual
+            .get();
 
+        if (querySnapshot.docs.isEmpty) {
+          throw Exception(
+            "No se encontró ningún contrato vinculado a esta propiedad.",
+          );
+        }
+
+        // 3. EXTRAER EL ID DEL CONTRATO ENCONTRADO
+        final String contractId = querySnapshot.docs.first.id;
+
+        // 4. ACTUALIZAR EL ESTADO DEL CONTRATO
+        await ContractService().updateContractStatus(
+          contractId,
+          PropertyStatusEnum.paidPendingReview.name,
+        );
         emit(
           PaymentSuccess(
             transactionId: "UP_REF_${DateTime.now().millisecondsSinceEpoch}",

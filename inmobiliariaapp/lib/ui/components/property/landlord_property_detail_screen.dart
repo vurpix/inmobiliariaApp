@@ -1,10 +1,15 @@
 // ui/screens/landlord/landlord_property_detail_screen.dart
+
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:inmobiliariaapp/bloc/signatureBloc/signature_bloc_bloc.dart';
+import 'package:inmobiliariaapp/bloc/signatureBloc/signature_bloc_event.dart';
+import 'package:inmobiliariaapp/bloc/signatureBloc/signature_bloc_state.dart';
 import 'package:inmobiliariaapp/enum/contract_status.dart';
 import 'package:inmobiliariaapp/enum/user_role.dart';
 import 'package:inmobiliariaapp/models/config/app_values_model.dart';
@@ -12,12 +17,14 @@ import 'package:inmobiliariaapp/models/contract_model.dart';
 import 'package:inmobiliariaapp/models/property_model.dart';
 import 'package:inmobiliariaapp/services/config_service.dart';
 import 'package:inmobiliariaapp/services/contract_service.dart';
+import 'package:inmobiliariaapp/ui/components/info_box_widget.dart';
 import 'package:inmobiliariaapp/ui/components/pdf/Pdf_view_screen.dart';
 import 'package:inmobiliariaapp/ui/components/pdf/pdf_action_buttons.dart';
-import 'package:inmobiliariaapp/utils/format_extensions.dart'; // Extensión global única para .toCOP()
 import 'package:inmobiliariaapp/utils/themes.dart';
 import 'package:inmobiliariaapp/ui/components/global/custom_text.dart';
 import 'package:inmobiliariaapp/ui/components/auth_ux/user_review_dialog.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+
 
 class LandlordPropertyDetailScreen extends StatefulWidget {
   final ContractModel contract;
@@ -39,13 +46,26 @@ class _LandlordPropertyDetailScreenState
   final ContractService _contractService = ContractService();
   final ConfigService _configService = ConfigService();
 
+  late final Stream<ContractModel?> _contractStream;
+  late final String _contractId;
+
   bool _isUploading = false;
   File? _selectedFile;
 
-  int _getGestionPrice(AppValuesModel config) {
-    final canon = widget.contract.canonAmount;
+  @override
+  void initState() {
+    super.initState();
+
+    _contractStream = _contractService.watchContractByProperty(
+      widget.property.id!,
+    );
+
+    _contractId = widget.contract.id ?? widget.property.id!;
+  }
+
+  int _getGestionPrice(AppValuesModel config, double canonAmount) {
     for (var scale in config.priceScales) {
-      if (canon >= scale.min && canon <= scale.max) {
+      if (canonAmount >= scale.min && canonAmount <= scale.max) {
         return scale.price;
       }
     }
@@ -63,6 +83,7 @@ class _LandlordPropertyDetailScreenState
         setState(() {
           _selectedFile = File(result.files.single.path!);
         });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: const CustomText(
@@ -83,15 +104,16 @@ class _LandlordPropertyDetailScreenState
     }
   }
 
-  Future<bool> _checkIfAlreadyReviewed() async {
-    if (widget.contract.tenant == null) return false;
+  Future<bool> _checkIfAlreadyReviewed(ContractModel currentContract) async {
+    if (currentContract.tenant == null) return false;
+
     try {
       final query = await FirebaseFirestore.instance
           .collection('users')
-          .doc(widget.contract.tenant!.uid)
+          .doc(currentContract.tenant!.uid)
           .collection('reviews')
-          .where('contractId', isEqualTo: widget.contract.id)
-          .where('fromUserId', isEqualTo: widget.contract.ownerId)
+          .where('contractId', isEqualTo: currentContract.id)
+          .where('fromUserId', isEqualTo: currentContract.ownerId)
           .limit(1)
           .get();
 
@@ -102,13 +124,14 @@ class _LandlordPropertyDetailScreenState
     }
   }
 
-  Future<void> _uploadAndSubmit() async {
+  Future<void> _uploadAndSubmit(ContractModel currentContract) async {
     if (_selectedFile == null) return;
 
     setState(() => _isUploading = true);
+
     try {
       String fileName =
-          'contracts/signed/OWNER_${widget.contract.id}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+          'contracts/signed/OWNER_${currentContract.id}_${DateTime.now().millisecondsSinceEpoch}.pdf';
 
       TaskSnapshot uploadTask = await FirebaseStorage.instance
           .ref()
@@ -117,9 +140,9 @@ class _LandlordPropertyDetailScreenState
 
       String downloadUrl = await uploadTask.ref.getDownloadURL();
 
-      await _contractService.updateFields(widget.contract.id!, {
+      await _contractService.updateFields(currentContract.id!, {
         'ownerSignedPdfUrl': downloadUrl,
-        'status': ContractStatus.signedPendingReview.name, 
+        'status': ContractStatus.signedPendingReview.name,
       });
 
       if (mounted) {
@@ -157,257 +180,507 @@ class _LandlordPropertyDetailScreenState
     }
   }
 
+  Future<void> _openOwnerWebView(
+    BuildContext context,
+    String link,
+    String contractId,
+  ) async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => MyWebViewPage(
+          initialUrl: link,
+        ),
+      ),
+    );
+
+    if (!context.mounted) return;
+
+    context.read<SignatureBloc>().add(
+          RefreshSignatureStatusRequested(contractId),
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final DateTime startDate =
-        widget.contract.updatedAt ?? widget.contract.createdAt;
-    DateTime endDate = startDate;
-
-    if (widget.contract.duration != null &&
-        widget.contract.duration!.isNotEmpty) {
-      try {
-        final parts = widget.contract.duration!.split(' ');
-        final int value = int.parse(parts[0]);
-        final String unit = parts[1].toLowerCase();
-
-        if (unit.contains('mes')) {
-          endDate = DateTime(
-            startDate.year,
-            startDate.month + value,
-            startDate.day,
-          );
-        } else if (unit.contains('año') || unit.contains('años')) {
-          endDate = DateTime(
-            startDate.year + value,
-            startDate.month,
-            startDate.day,
-          );
-        }
-      } catch (e) {
-        endDate = startDate.add(const Duration(days: 365));
-      }
-    } else {
-      endDate = startDate.add(const Duration(days: 365));
-    }
-
-    final int daysLeft = 5; // Simulación activa para pruebas
-
-    return Scaffold(
-      backgroundColor: context.surfaceColor.withOpacity(0.96),
-      appBar: AppBar(
-        title: CustomText(
-          "Gestión de Contrato",
-          baseFontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: Colors.white,
+    return BlocProvider(
+      create: (_) => SignatureBloc()
+        ..add(
+          WatchContractSignatureRequested(_contractId),
         ),
-        backgroundColor: context.primaryColor,
-        iconTheme: const IconThemeData(color: Colors.white),
-        elevation: 0,
-        scrolledUnderElevation:
-            0, // --- SOLUCIÓN DE COLOR TENUE AL HACER SCROLL ---
-      ),
-      body: StreamBuilder<AppValuesModel>(
-        stream: _configService.watchAppValues(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData) {
-            return const Center(
-              child: CustomText(
-                "Error al cargar configuración",
-                baseFontSize: 14,
-              ),
-            );
-          }
+      child: Scaffold(
+        backgroundColor: context.surfaceColor.withOpacity(0.96),
+        appBar: AppBar(
+          title: const CustomText(
+            "Gestión de Contrato",
+            baseFontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+          backgroundColor: context.primaryColor,
+          iconTheme: const IconThemeData(color: Colors.white),
+          elevation: 0,
+          scrolledUnderElevation: 0,
+        ),
+        body: StreamBuilder<ContractModel?>(
+          stream: _contractStream,
+          builder: (context, contractSnapshot) {
+            final ContractModel currentContract =
+                contractSnapshot.data ?? widget.contract;
 
-          final config = snapshot.data!;
-          final int gestionPrice = _getGestionPrice(config);
+            return StreamBuilder<AppValuesModel>(
+              stream: _configService.watchAppValues(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          final bool isApproved = widget.contract.status == 'active';
-          final bool isRejected = widget.contract.status == 'signatureRejected';
-          final bool isPendingReview =
-              widget.contract.status == ContractStatus.signedPendingReview.name;
-          final bool canUpload =
-              widget.contract.tenantSignedPdfUrl != null || isRejected;
+                if (!snapshot.hasData) {
+                  return const Center(
+                    child: CustomText(
+                      "Error al cargar configuración",
+                      baseFontSize: 14,
+                    ),
+                  );
+                }
 
-          return SingleChildScrollView(
-            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildPropertyHeader(),
-                const SizedBox(height: 20),
+                final config = snapshot.data!;
+                final int gestionPrice = _getGestionPrice(
+                  config,
+                  currentContract.canonAmount,
+                );
 
-                _sectionTitle("Resumen de Activación"),
-                const SizedBox(height: 10),
-                _buildFinancialCard(gestionPrice),
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.only(left: 4),
-                  child: CustomText(
-                    "* Este cobro de gestión es único para activar la propiedad.",
-                    baseFontSize: 12,
-                    color: context.textSecondaryColor.withOpacity(0.5),
-                  ),
-                ),
-                const SizedBox(height: 20),
+                return BlocBuilder<SignatureBloc, SignatureState>(
+                  builder: (context, signatureState) {
+                    final bool isApproved =
+                        currentContract.status == 'active';
 
-                const Divider(height: 1),
-                const SizedBox(height: 16),
-                _sectionTitle("Documentos del Proceso"),
-                const SizedBox(height: 12),
-                ...widget.property.docUrls.map(
-                  (url) => _buildDocTile(
-                    title: "Soporte Legal Propiedad",
-                    url: url,
-                    color: Colors.orange[800]!,
-                    icon: Icons.account_balance_outlined,
-                  ),
-                ),
-                if (widget.contract.baseContractPdfUrl != null)
-                  _buildDocTile(
-                    title: "Borrador de Contrato PDF",
-                    url: widget.contract.baseContractPdfUrl!,
-                    color: Colors.redAccent,
-                    icon: Icons.gavel_rounded,
-                    subtitle: "Documento base para firmar",
-                  ),
-                if (widget.contract.ownerSignedPdfUrl != null)
-                  _buildDocTile(
-                    title: "Mi Contrato Firmado",
-                    url: widget.contract.ownerSignedPdfUrl!,
-                    color: Colors.green[700]!,
-                    icon: Icons.draw_rounded,
-                    subtitle: isApproved
-                        ? "Documento aprobado por administración"
-                        : "Documento en revisión",
-                  ),
+                    final bool isRejected =
+                        currentContract.status ==
+                        ContractStatus.signatureRejected.name;
 
-                const SizedBox(height: 20),
-                const Divider(height: 1),
-                const SizedBox(height: 16),
-                _sectionTitle("Estado del Proceso"),
-                const SizedBox(height: 12),
+                    final bool isPendingReview =
+                        currentContract.status ==
+                        ContractStatus.signedPendingReview.name;
 
-                if (isApproved)
-                  _buildInfoBox(
-                    "✅ El inmueble y el contrato han sido aprobados exitosamente. Su propiedad ya se encuentra activa en el catálogo.",
-                    Colors.green[700]!,
-                  )
-                else if (isPendingReview)
-                  _buildInfoBox(
-                    "⏳ Su contrato firmado ha sido enviado y está en revisión por el administrador. Le notificaremos pronto.",
-                    context.primaryColor,
-                  )
-                else if (canUpload) ...[
-                  if (isRejected) _buildRejectAlert(),
+                    bool ownerHasSigned = false;
+                    String? myOwnerSignLink;
+                    String ownerSignatureStatus = 'WAITING';
+                    String tenantSignatureStatus = 'PENDING';
 
-                  _buildStep(1, "Descargue el borrador PDF arriba."),
-                  _buildStep(2, "Firme el documento física o digitalmente."),
-                  _buildStep(3, "Suba el PDF firmado aquí abajo."),
-                  const SizedBox(height: 16),
+                    final ownerUid = currentContract.ownerId;
 
-                  _selectedFile == null
-                      ? _buildInitialUploadButton()
-                      : _buildPreviewAndSubmitActions(),
-                ],
+                    if (signatureState.signature != null) {
+                      final signature = signatureState.signature!;
 
-                // --- CALIFICACIÓN INTELIGENTE DEL INQUILINO ---
-                if (isApproved &&
-                    daysLeft <= 15 &&
-                    widget.contract.tenant != null) ...[
-                  FutureBuilder<bool>(
-                    future: _checkIfAlreadyReviewed(),
-                    builder: (context, reviewSnapshot) {
-                      if (reviewSnapshot.connectionState ==
-                          ConnectionState.waiting) {
-                        return const Padding(
-                          padding: EdgeInsets.only(top: 20),
-                          child: Center(child: LinearProgressIndicator()),
-                        );
+                      ownerSignatureStatus = signature.statusForUser(ownerUid);
+                      tenantSignatureStatus =
+                          signature.tenantSignatureStatus;
+
+                      myOwnerSignLink = signature.signLinkForUser(ownerUid);
+
+                      ownerHasSigned = ownerSignatureStatus == 'SIGNED' ||
+                          ownerSignatureStatus == 'COMPLETED';
+                    } else {
+                      if (currentContract.signaturesTracking != null) {
+                        final tracking = currentContract.signaturesTracking!;
+
+                        if (tracking.containsKey(ownerUid)) {
+                          final ownerStatus = tracking[ownerUid]!.status;
+                          ownerSignatureStatus = ownerStatus;
+                          ownerHasSigned = ownerStatus == 'SIGNED' ||
+                              ownerStatus == 'COMPLETED';
+
+                          try {
+                            final rawTrackingMap = (currentContract as dynamic)
+                                .toMap()['signaturesTracking']?[ownerUid] as Map?;
+
+                            if (rawTrackingMap != null &&
+                                rawTrackingMap.containsKey('signLink')) {
+                              myOwnerSignLink =
+                                  rawTrackingMap['signLink']?.toString();
+                            }
+                          } catch (_) {
+                            myOwnerSignLink = tracking[ownerUid]!.signLink;
+                          }
+                        }
                       }
+                    }
 
-                      final bool alreadyReviewed = reviewSnapshot.data ?? false;
+                    final bool canUpload =
+                        !ownerHasSigned && !isPendingReview && !isApproved;
 
-                      return Column(
+                    return SingleChildScrollView(
+                      keyboardDismissBehavior:
+                          ScrollViewKeyboardDismissBehavior.onDrag,
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          _buildPropertyHeader(),
+                          const SizedBox(height: 20),
+
+                          _sectionTitle("Resumen de Activación"),
+                          const SizedBox(height: 10),
+                          _buildFinancialCard(
+                            gestionPrice,
+                            currentContract.canonAmount,
+                          ),
+                          const SizedBox(height: 8),
+
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: CustomText(
+                              "* Este cobro de gestión es único para activar la propiedad.",
+                              baseFontSize: 12,
+                              color: context.textSecondaryColor.withOpacity(0.5),
+                            ),
+                          ),
+
                           const SizedBox(height: 20),
                           const Divider(height: 1),
                           const SizedBox(height: 16),
-                          _sectionTitle("Cierre del Período Legal"),
+
+                          _sectionTitle("Documentos del Proceso"),
                           const SizedBox(height: 12),
-                          alreadyReviewed
-                              ? _buildInfoBox(
-                                  "🔒 Ya se calificó al inquilino por este período contractual de arriendo.",
-                                  Colors.blueGrey[600]!,
-                                )
-                              : SizedBox(
-                                  width: double.infinity,
-                                  height: 48,
-                                  child: ElevatedButton.icon(
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: context.primaryColor,
-                                      foregroundColor: Colors.white,
-                                      elevation: 0,
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(12),
+
+                          ...widget.property.docUrls.map(
+                            (url) => _buildDocTile(
+                              title: "Soporte Legal Propiedad",
+                              url: url,
+                              color: Colors.orange[800]!,
+                              icon: Icons.account_balance_outlined,
+                            ),
+                          ),
+
+                          if (currentContract.baseContractPdfUrl != null)
+                            _buildDocTile(
+                              title: "Borrador de Contrato PDF",
+                              url: currentContract.baseContractPdfUrl!,
+                              color: Colors.redAccent,
+                              icon: Icons.gavel_rounded,
+                              subtitle: "Documento base para firmar",
+                            ),
+
+                          if (ownerHasSigned &&
+                              currentContract.ownerSignedPdfUrl != null)
+                            _buildDocTile(
+                              title: "📄 CONTRATO LEGALIZADO (CON TU FIRMA)",
+                              url: currentContract.ownerSignedPdfUrl!,
+                              color: Colors.blue[800]!,
+                              icon: Icons.verified_user_rounded,
+                              subtitle: "Documento firmado oficialmente",
+                            )
+                          else if (currentContract.ownerSignedPdfUrl != null)
+                            _buildDocTile(
+                              title: "Mi Contrato Firmado",
+                              url: currentContract.ownerSignedPdfUrl!,
+                              color: Colors.green[700]!,
+                              icon: Icons.draw_rounded,
+                              subtitle: isApproved
+                                  ? "Documento aprobado por administración"
+                                  : "Documento en revisión",
+                            ),
+
+                          const SizedBox(height: 20),
+                          const Divider(height: 1),
+                          const SizedBox(height: 16),
+
+                          _sectionTitle("Estado del Proceso"),
+                          const SizedBox(height: 12),
+
+                          if (signatureState.status == SignatureStatus.loading ||
+                              signatureState.status == SignatureStatus.initial)
+                            buildInfoBox(
+                              "⏳ Consultando estado de firma digital...",
+                              Colors.blueGrey,
+                            ),
+
+                          if (signatureState.errorMessage != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: buildInfoBox(
+                                "⚠️ ${signatureState.errorMessage}",
+                                Colors.redAccent,
+                              ),
+                            ),
+
+                          _buildSignatureStatusBox(
+                            ownerStatus: ownerSignatureStatus,
+                            tenantStatus: tenantSignatureStatus,
+                          ),
+
+                          const SizedBox(height: 12),
+
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              icon: signatureState.isRefreshing
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
                                       ),
-                                    ),
-                                    icon: const Icon(
-                                      Icons.star_rate_rounded,
-                                      size: 20,
-                                    ),
-                                    label: Text(
-                                      "CALIFICAR A: ${widget.contract.tenant!.nombre.toUpperCase()}",
-                                      style: const TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 12,
-                                        letterSpacing: 0.2,
-                                      ),
-                                    ),
-                                    onPressed: () async {
-                                      await UserReviewDialog.show(
-                                        context: context,
-                                        targetUserId:
-                                            widget.contract.tenant!.uid,
-                                        targetUserName:
-                                            widget.contract.tenant!.nombre,
-                                        fromUserId: widget.contract.ownerId,
-                                        fromName: "Propietario",
-                                        fromRole: UserRole.landlord.name,
-                                        contractId: widget.contract.id!,
-                                        defaultTags: const [
-                                          "Excelente comunicación",
-                                          "Puntual con el canon",
-                                          "Muy ordenado",
-                                          "Cuidó las instalaciones",
-                                          "Altamente recomendado",
-                                        ],
-                                      );
-                                      Future.delayed(
-                                        const Duration(milliseconds: 600),
-                                        () {
-                                          if (mounted) setState(() {});
-                                        },
-                                      );
+                                    )
+                                  : const Icon(Icons.sync),
+                              label: const Text("Actualizar estado de firma"),
+                              onPressed: signatureState.isRefreshing
+                                  ? null
+                                  : () {
+                                      context.read<SignatureBloc>().add(
+                                            RefreshSignatureStatusRequested(
+                                              _contractId,
+                                            ),
+                                          );
                                     },
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
+
+                          if (isApproved)
+                            buildInfoBox(
+                              "✅ ¡PROCESO COMPLETADO! El contrato con su firma digital ha sido verificado con éxito. Su propiedad ya está activa en el catálogo público.",
+                              Colors.green[700]!,
+                            )
+                          else if (ownerHasSigned && isPendingReview)
+                            buildInfoBox(
+                              "🎉 ¡Firma completada! El contrato fue firmado exitosamente por Usted. Se encuentra en validación jurídica final por el Administrador.",
+                              Colors.teal[700]!,
+                            )
+                          else if (isPendingReview)
+                            buildInfoBox(
+                              "⏳ Su contrato firmado ha sido enviado y está en revisión por el administrador. Le notificaremos pronto.",
+                              context.primaryColor,
+                            )
+                          else if (canUpload) ...[
+                            if (isRejected) _buildRejectAlert(),
+
+                            if (myOwnerSignLink != null &&
+                                myOwnerSignLink.isNotEmpty) ...[
+                              Container(
+                                width: double.infinity,
+                                margin: const EdgeInsets.only(bottom: 14),
+                                child: ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: const Color(0xFFE65100),
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 14,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    elevation: 1,
                                   ),
+                                  icon: const Icon(
+                                    Icons.assignment_turned_in_rounded,
+                                    size: 20,
+                                  ),
+                                  label: const Text(
+                                    "IR A FIRMAR CONTRATO DIGITAL (IN-APP)",
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                      letterSpacing: 0.3,
+                                    ),
+                                  ),
+                                  onPressed: () async {
+                                    await _openOwnerWebView(
+                                      context,
+                                      myOwnerSignLink!,
+                                      _contractId,
+                                    );
+                                  },
                                 ),
+                              ),
+                            ],
+
+                            _buildStep(
+                              1,
+                              "Descargue el borrador PDF arriba o use el acceso digital de Viafirma.",
+                            ),
+                            _buildStep(
+                              2,
+                              "Firme el documento física o digitalmente.",
+                            ),
+                            _buildStep(
+                              3,
+                              "Suba el PDF firmado aquí abajo si optó por firma externa manual.",
+                            ),
+                            const SizedBox(height: 16),
+
+                            _selectedFile == null
+                                ? _buildInitialUploadButton()
+                                : _buildPreviewAndSubmitActions(
+                                    currentContract,
+                                  ),
+                          ],
+
+                          if (isApproved && currentContract.tenant != null) ...[
+                            FutureBuilder<bool>(
+                              future: _checkIfAlreadyReviewed(currentContract),
+                              builder: (context, reviewSnapshot) {
+                                if (reviewSnapshot.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const Padding(
+                                    padding: EdgeInsets.only(top: 20),
+                                    child: Center(
+                                      child: LinearProgressIndicator(),
+                                    ),
+                                  );
+                                }
+
+                                final bool alreadyReviewed =
+                                    reviewSnapshot.data ?? false;
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const SizedBox(height: 20),
+                                    const Divider(height: 1),
+                                    const SizedBox(height: 16),
+                                    _sectionTitle("Cierre del Período Legal"),
+                                    const SizedBox(height: 12),
+
+                                    alreadyReviewed
+                                        ? buildInfoBox(
+                                            "🔒 Ya se calificó al inquilino por este período contractual de arriendo.",
+                                            Colors.blueGrey[600]!,
+                                          )
+                                        : SizedBox(
+                                            width: double.infinity,
+                                            height: 48,
+                                            child: ElevatedButton.icon(
+                                              style: ElevatedButton.styleFrom(
+                                                backgroundColor:
+                                                    context.primaryColor,
+                                                foregroundColor: Colors.white,
+                                                elevation: 0,
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(12),
+                                                ),
+                                              ),
+                                              icon: const Icon(
+                                                Icons.star_rate_rounded,
+                                                size: 20,
+                                              ),
+                                              label: Text(
+                                                "CALIFICAR A: ${currentContract.tenant!.nombre.toUpperCase()}",
+                                                style: const TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 12,
+                                                  letterSpacing: 0.2,
+                                                ),
+                                              ),
+                                              onPressed: () async {
+                                                await UserReviewDialog.show(
+                                                  context: context,
+                                                  targetUserId:
+                                                      currentContract.tenant!.uid,
+                                                  targetUserName:
+                                                      currentContract
+                                                          .tenant!.nombre,
+                                                  fromUserId:
+                                                      currentContract.ownerId,
+                                                  fromName: "Propietario",
+                                                  fromRole:
+                                                      UserRole.landlord.name,
+                                                  contractId:
+                                                      currentContract.id!,
+                                                  defaultTags: const [
+                                                    "Excelente comunicación",
+                                                    "Puntual con el canon",
+                                                    "Muy ordenado",
+                                                    "Cuidó las instalaciones",
+                                                    "Altamente recomendado",
+                                                  ],
+                                                );
+
+                                                if (mounted) setState(() {});
+                                              },
+                                            ),
+                                          ),
+                                  ],
+                                );
+                              },
+                            ),
+                          ],
+
+                          const SizedBox(height: 24),
                         ],
-                      );
-                    },
-                  ),
-                ],
-                const SizedBox(height: 24),
-              ],
-            ),
-          );
-        },
+                      ),
+                    );
+                  },
+                );
+              },
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSignatureStatusBox({
+    required String ownerStatus,
+    required String tenantStatus,
+  }) {
+    String label(String status) {
+      switch (status) {
+        case 'PENDING':
+          return 'Pendiente por firmar';
+        case 'WAITING':
+          return 'Esperando turno';
+        case 'SIGNED':
+        case 'COMPLETED':
+          return 'Firmado';
+        case 'REJECTED':
+          return 'Rechazado';
+        case 'RECEIVED':
+          return 'Recibido por Viafirma';
+        case 'FINISHED':
+          return 'Finalizado';
+        case 'ERROR':
+          return 'Error';
+        default:
+          return status;
+      }
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE65100).withOpacity(0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xFFE65100).withOpacity(0.16),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const CustomText(
+            "Estado de firmas digitales",
+            baseFontSize: 13,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFFE65100),
+          ),
+          const SizedBox(height: 8),
+          CustomText(
+            "Inquilino: ${label(tenantStatus)}",
+            baseFontSize: 12,
+          ),
+          const SizedBox(height: 4),
+          CustomText(
+            "Mi firma como propietario: ${label(ownerStatus)}",
+            baseFontSize: 12,
+          ),
+        ],
       ),
     );
   }
@@ -439,7 +712,7 @@ class _LandlordPropertyDetailScreenState
     );
   }
 
-  Widget _buildPreviewAndSubmitActions() {
+  Widget _buildPreviewAndSubmitActions(ContractModel currentContract) {
     return Column(
       children: [
         Container(
@@ -524,7 +797,9 @@ class _LandlordPropertyDetailScreenState
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  onPressed: _isUploading ? null : _uploadAndSubmit,
+                  onPressed: _isUploading
+                      ? null
+                      : () => _uploadAndSubmit(currentContract),
                   icon: _isUploading
                       ? const SizedBox(
                           width: 16,
@@ -592,14 +867,14 @@ class _LandlordPropertyDetailScreenState
   }
 
   Widget _sectionTitle(String title) => Padding(
-    padding: const EdgeInsets.only(left: 2),
-    child: CustomText(
-      title,
-      fontWeight: FontWeight.w900,
-      baseFontSize: 14,
-      color: context.primaryColor,
-    ),
-  );
+        padding: const EdgeInsets.only(left: 2),
+        child: CustomText(
+          title,
+          fontWeight: FontWeight.w900,
+          baseFontSize: 14,
+          color: context.primaryColor,
+        ),
+      );
 
   Widget _buildPropertyHeader() {
     return Row(
@@ -662,7 +937,7 @@ class _LandlordPropertyDetailScreenState
     );
   }
 
-  Widget _buildFinancialCard(int gestion) {
+  Widget _buildFinancialCard(int gestion, double canonAmount) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -679,10 +954,7 @@ class _LandlordPropertyDetailScreenState
       ),
       child: Column(
         children: [
-          _infoRow(
-            "Canon de Arriendo:",
-            (widget.contract.canonAmount).toInt().toCOPMoney(),
-          ),
+          _infoRow("Canon de Arriendo:", canonAmount.toInt().toCOPMoney()),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 10),
             child: Divider(height: 1, thickness: 0.5),
@@ -801,30 +1073,199 @@ class _LandlordPropertyDetailScreenState
       ),
     );
   }
+}
 
-  Widget _buildInfoBox(String msg, Color col) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: col.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: col.withOpacity(0.2)),
-      ),
-      child: CustomText(
-        msg,
-        textAlign: TextAlign.center,
-        fontWeight: FontWeight.bold,
-        baseFontSize: 12,
-        color: col,
-      ),
-    );
+extension on int {
+  String toCOPMoney() {
+    return "\$${toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}";
   }
 }
 
-// --- EXTENSION DE SEGURIDAD INTERNA REUTILIZABLE PARA GARANTIZAR COMPILACIÓN SIN INTERRUPCIONES ---
-extension on int {
-  String toCOPMoney() {
-    return "\$${this.toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]}.')}";
+// =========================================================================
+// 🟢 INTEGRACIÓN DE LA CLASE DE NAVEGACIÓN Y ESCUCHA DE CAMBIOS
+// =========================================================================
+
+class CustomInAppWebController extends ChangeNotifier {
+  InAppWebViewController? _webViewController;
+  String _currentUrl = "";
+  bool _isLoading = false;
+  double _progress = 0.0;
+
+  String get currentUrl => _currentUrl;
+  bool get isLoading => _isLoading;
+  double get progress => _progress;
+  InAppWebViewController? get controller => _webViewController;
+
+  void setController(InAppWebViewController controller) {
+    _webViewController = controller;
+  }
+
+  void updateUrl(WebUri? url) {
+    if (url != null) {
+      _currentUrl = url.toString();
+      notifyListeners();
+    }
+  }
+
+  void setLoading(bool loading) {
+    _isLoading = loading;
+    notifyListeners();
+  }
+
+  void updateProgress(int progress) {
+    _progress = progress / 100;
+    notifyListeners();
+  }
+
+  Future<void> goBack() async {
+    if (await _webViewController?.canGoBack() ?? false) {
+      await _webViewController?.goBack();
+    }
+  }
+
+  Future<void> reload() async {
+    await _webViewController?.reload();
+  }
+}
+
+class MyWebViewPage extends StatefulWidget {
+  final String initialUrl;
+
+  const MyWebViewPage({
+    Key? key,
+    required this.initialUrl,
+  }) : super(key: key);
+
+  @override
+  State<MyWebViewPage> createState() => _MyWebViewPageState();
+}
+
+class _MyWebViewPageState extends State<MyWebViewPage> {
+  late CustomInAppWebController _webController;
+
+  @override
+  void initState() {
+    super.initState();
+    _webController = CustomInAppWebController();
+  }
+
+  @override
+  void dispose() {
+    _webController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text(
+          "Firma de Contrato Digital",
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        backgroundColor: const Color(0xFFE65100),
+        iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _webController.reload(),
+          ),
+        ],
+      ),
+      body: ListenableBuilder(
+        listenable: _webController,
+        builder: (context, child) {
+          return Column(
+            children: [
+              if (_webController.isLoading)
+                LinearProgressIndicator(
+                  value: _webController.progress,
+                  color: const Color(0xFFE65100),
+                ),
+              Expanded(
+                child: InAppWebView(
+                  initialUrlRequest: URLRequest(url: WebUri(widget.initialUrl)),
+                  initialSettings: InAppWebViewSettings(
+                    useShouldOverrideUrlLoading: true,
+                    mediaPlaybackRequiresUserGesture: false,
+                    javaScriptEnabled: true,
+                    domStorageEnabled: true,
+                    databaseEnabled: true,
+                    thirdPartyCookiesEnabled: true,
+                    userAgent:
+                        "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
+                  ),
+                  onWebViewCreated: (controller) {
+                    _webController.setController(controller);
+                  },
+                  onLoadStart: (controller, url) {
+                    _webController.setLoading(true);
+                    _webController.updateUrl(url);
+                  },
+                  onLoadStop: (controller, url) {
+                    _webController.setLoading(false);
+                    _webController.updateUrl(url);
+                  },
+                  onProgressChanged: (controller, progress) {
+                    _webController.updateProgress(progress);
+                  },
+                  shouldOverrideUrlLoading:
+                      (controller, navigationAction) async {
+                    var uri = navigationAction.request.url;
+
+                    if (uri != null &&
+                        (uri.toString().contains("success") ||
+                            uri.toString().contains("complete"))) {
+                      debugPrint(
+                        "🎯 ¡Contrato firmado detectado en la URL!: $uri",
+                      );
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            "¡Proceso completado en el portal de firma!",
+                          ),
+                        ),
+                      );
+
+                      Navigator.pop(context);
+                      return NavigationActionPolicy.CANCEL;
+                    }
+
+                    return NavigationActionPolicy.ALLOW;
+                  },
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+      bottomNavigationBar: ListenableBuilder(
+        listenable: _webController,
+        builder: (context, child) {
+          return Container(
+            color: Colors.white,
+            height: 50,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.arrow_back),
+                  onPressed: () => _webController.goBack(),
+                ),
+                const Text(
+                  "Navegación Segura",
+                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 }

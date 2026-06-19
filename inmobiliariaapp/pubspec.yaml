@@ -75,6 +75,8 @@ dependencies:
   latlong2: ^0.9.1
   #agregar la dependencia de iconos
   font_awesome_flutter: ^11.0.0
+  #agregar la dependencia navegacion webview
+  flutter_inappwebview: ^6.1.5
   
 dev_dependencies:
   flutter_test:

@@ -197,15 +197,15 @@ class _ReviewBottomSheetContentState extends State<_ReviewBottomSheetContent> {
             // --- CORREGIDO: Ahora muestra de forma impecable el nombre del calificado ---
             CustomText.title(
               'Calificar a $cleanTargetName',
-              baseFontSize: 20,
+                 baseFontSize: ResponsiveUtils.getFontSize(context, 20),
               fontWeight: FontWeight.w900,
               color: context.primaryColor,
             ),
             const SizedBox(height: 6),
             CustomText(
               "Cuéntanos tu experiencia de arriendo. Tu opinión ayuda a mantener la transparencia y seguridad en Luxe Estate.",
-              baseFontSize: 13,
-              color: context.textSecondaryColor.withOpacity(0.6),
+              baseFontSize: ResponsiveUtils.getFontSize(context, 14),
+              color: context.textSecondaryColor,
             ),
             const SizedBox(height: 24),
 

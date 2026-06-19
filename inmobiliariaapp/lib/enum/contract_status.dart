@@ -15,6 +15,7 @@ enum ContractStatus {
 
   /// El propietario ya firmó y el administrador debe revisar el documento final
   signedPendingReview,
+  signatureRejectedTenant,
 
   /// La firma fue rechazada por el administrador (requiere corrección)
   signatureRejected,

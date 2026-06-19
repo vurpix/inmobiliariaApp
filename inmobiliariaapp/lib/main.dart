@@ -1,11 +1,13 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:inmobiliariaapp/bloc/notificationBloc/notification_bloc.dart';
 import 'package:inmobiliariaapp/bloc/notificationBloc/notification_event.dart';
 import 'package:inmobiliariaapp/bloc/notificationBloc/notification_state.dart';
+import 'package:inmobiliariaapp/bloc/signatureBloc/signature_bloc_bloc.dart';
 
 // Repositorios
 import 'package:inmobiliariaapp/services/auth_repository.dart';
@@ -51,7 +53,10 @@ class SimpleBlocObserver extends BlocObserver {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown, // Opcional (si se gira 180° de cabeza)
+  ]);
   // 1. Inicialización de Firebase y Formatos
   await initializeDateFormatting('es', null);
   await Firebase.initializeApp();
@@ -177,6 +182,7 @@ class _MyAppState extends State<MyApp> {
         ),
         BlocProvider(create: (context) => ContractBloc()),
         BlocProvider(create: (context) => ScheduleBloc()),
+        BlocProvider(create: (context) => SignatureBloc()),
         BlocProvider(create: (context) => FavoritesBloc()),
         BlocProvider(create: (context) => SubscriptionBloc()),
         BlocProvider(create: (context) => NotificationBloc()),

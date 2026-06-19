@@ -1,6 +1,8 @@
 // ui/components/admin/admin_user_detail_screen.dart
 import 'package:flutter/material.dart';
 import 'package:inmobiliariaapp/models/user.dart';
+import 'package:inmobiliariaapp/ui/components/auth_ux/user_reviews_history_screen.dart';
+import 'package:inmobiliariaapp/ui/components/global/custom_text_button.dart';
 import 'package:inmobiliariaapp/utils/themes.dart';
 import 'package:inmobiliariaapp/utils/format_extensions.dart'; // Tus extensiones de fechas globales
 import 'package:inmobiliariaapp/ui/components/global/custom_text.dart';
@@ -30,48 +32,71 @@ class AdminUserDetailScreen extends StatelessWidget {
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // --- 1. TARJETA CABECERA DE PERFIL (FOTO, NOMBRE, ROL Y CALIFICACIÓN) ---
             _buildProfileHeaderCard(context, rawRole),
             const SizedBox(height: 20),
+            _buildRoleBadge(context, rawRole),
+            const SizedBox(height: 20),
 
             // --- 2. SECCIÓN ADAPTADA: INFORMACIÓN CIVIL Y LEGAL ---
             _buildSectionCard(
-              title: "🪪 IDENTIFICACIÓN LEGAL Y PERFIL",
+              title: "Identidad Legal y Perfil",
               context: context,
               child: Column(
                 children: [
                   _buildDetailRow(
                     "Tipo de Documento",
                     user.documentType.toUpperCase(),
+                    context: context,
                   ),
-                  _buildDetailRow("Número de Documento", user.documentNumber),
-                  _buildDetailRow("Ocupación / Actividad", user.occupation),
+                  _buildDetailRow(
+                    "Número de Documento",
+                    user.documentNumber,
+                    context: context,
+                  ),
+                  _buildDetailRow(
+                    "Ocupación / Actividad",
+                    user.occupation,
+                    context: context,
+                  ),
                   _buildDetailRow(
                     "Teléfono de Contacto",
                     user.phoneNumber ?? "No asignado",
+                    context: context,
                   ),
-                  _buildDetailRow("Correo Electrónico", user.email),
+                  _buildDetailRow(
+                    "Correo Electrónico",
+                    user.email,
+                    context: context,
+                  ),
                 ],
               ),
             ),
 
             // --- 3. SECCIÓN: CONTROL OPERATIVO Y SEGURIDAD ---
             _buildSectionCard(
-              title: "🤖 TELEMETRÍA Y SISTEMA",
+              title: "Telemetria Y Sistema",
               context: context,
               child: Column(
                 children: [
-                  _buildDetailRow("ID de Usuario", user.id, isCompact: true),
+                  _buildDetailRow(
+                    "ID de Usuario",
+                    user.id,
+                    isCompact: true,
+                    context: context,
+                  ),
                   // Usando tus extensiones de fecha .toFullDateTime()
                   _buildDetailRow(
                     "Fecha de Registro",
                     user.createdAt?.toFullDateTime() ?? "Sin registro",
+                    context: context,
                   ),
                   _buildDetailRow(
                     "Última Conexión",
                     user.lastLogin?.toFullDateTime() ?? "Sin registro",
+                    context: context,
                   ),
                   _buildDetailRow(
                     "Token Push FCM",
@@ -79,6 +104,7 @@ class AdminUserDetailScreen extends StatelessWidget {
                     valueColor: user.fcmToken != null
                         ? Colors.green
                         : Colors.grey,
+                    context: context,
                   ),
                 ],
               ),
@@ -102,13 +128,15 @@ class AdminUserDetailScreen extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1A365D).withOpacity(0.04),
+            color: context.primaryColor.withOpacity(0.04),
             blurRadius: 14,
             offset: const Offset(0, 4),
           ),
         ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.start,
         children: [
           CircleAvatar(
             radius: 34,
@@ -128,10 +156,11 @@ class AdminUserDetailScreen extends StatelessWidget {
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.start,
               children: [
-                CustomText.title(
+                CustomText(
                   user.name,
-                  baseFontSize: 18,
+                  baseFontSize: ResponsiveUtils.getFontSize(context, 18),
                   fontWeight: FontWeight.w800,
                 ),
                 const SizedBox(height: 6),
@@ -147,12 +176,23 @@ class AdminUserDetailScreen extends StatelessWidget {
                     const SizedBox(width: 4),
                     CustomText(
                       "${user.rating.toStringAsFixed(1)} ",
-                      baseFontSize: 13,
+                      baseFontSize: ResponsiveUtils.getFontSize(context, 12),
                       fontWeight: FontWeight.bold,
                     ),
-                    CustomText(
-                      " Bresha (${user.reviewCount})",
-                      baseFontSize: 12,
+                    CustomTextButton(
+                      " reseñas (${user.reviewCount})",
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => UserReviewsHistoryScreen(
+                              targetUserId: user.id,
+                              targetUserName: user.name,
+                            ),
+                          ),
+                        );
+                      },
+                      baseFontSize: ResponsiveUtils.getFontSize(context, 12),
                       color: context.textSecondaryColor.withOpacity(0.6),
                     ),
                   ],
@@ -160,7 +200,6 @@ class AdminUserDetailScreen extends StatelessWidget {
               ],
             ),
           ),
-          _buildRoleBadge(context, rawRole),
         ],
       ),
     );
@@ -174,29 +213,27 @@ class AdminUserDetailScreen extends StatelessWidget {
       badgeColor = context.primaryColor;
       label = "ADMIN";
     } else if (role.contains('owner') || role.contains('landlord')) {
-      badgeColor = const Color(0xFFE65100);
+      badgeColor = context.secondaryColor;
       label = "PROPIETARIO";
     } else {
-      badgeColor = Colors.green[700]!;
+      badgeColor = context.successColor;
       label = "INQUILINO";
     }
 
     return Container(
+      width: ResponsiveUtils.getWidth(context, 30),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: badgeColor.withOpacity(0.08),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: badgeColor.withOpacity(0.2)),
       ),
-      child: Text(
+      child: CustomText(
         label,
-        style: TextStyle(
-          fontFamily: 'Inter',
-          color: badgeColor,
-          fontSize: 10,
-          fontWeight: FontWeight.w900,
-          letterSpacing: 0.5,
-        ),
+        baseFontSize: ResponsiveUtils.getFontSize(context, 12),
+        color: badgeColor,
+        fontWeight: FontWeight.w700,
+        textAlign: TextAlign.center,
       ),
     );
   }
@@ -216,7 +253,7 @@ class AdminUserDetailScreen extends StatelessWidget {
         border: Border.all(color: context.textColor.withOpacity(0.03)),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF1A365D).withOpacity(0.015),
+            color: context.primaryColor.withOpacity(0.015),
             blurRadius: 10,
             offset: const Offset(0, 4),
           ),
@@ -227,9 +264,9 @@ class AdminUserDetailScreen extends StatelessWidget {
         children: [
           CustomText(
             title,
-            baseFontSize: 11,
+            baseFontSize: ResponsiveUtils.getFontSize(context, 14),
             fontWeight: FontWeight.w800,
-            color: context.textSecondaryColor.withOpacity(0.6),
+            color: context.primaryColor,
           ),
           const Padding(
             padding: EdgeInsets.only(top: 6, bottom: 10),
@@ -245,6 +282,7 @@ class AdminUserDetailScreen extends StatelessWidget {
     String label,
     String value, {
     Color? valueColor,
+    required BuildContext context,
     bool isCompact = false,
   }) {
     return Padding(
@@ -252,14 +290,20 @@ class AdminUserDetailScreen extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          CustomText(label, baseFontSize: 13, color: Colors.grey[500]!),
+          CustomText(
+            label,
+            baseFontSize: ResponsiveUtils.getFontSize(context, 12),
+            color: context.textSecondaryColor,
+          ),
           const SizedBox(width: 15),
           Expanded(
             child: Align(
               alignment: Alignment.centerRight,
               child: CustomText(
                 value,
-                baseFontSize: isCompact ? 11 : 13,
+                baseFontSize: isCompact
+                    ? ResponsiveUtils.getFontSize(context, 12)
+                    : ResponsiveUtils.getFontSize(context, 12),
                 fontWeight: FontWeight.w700,
                 color: valueColor,
                 overflow: TextOverflow.ellipsis,

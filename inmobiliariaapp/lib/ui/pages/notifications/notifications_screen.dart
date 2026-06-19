@@ -2,16 +2,27 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:inmobiliariaapp/bloc/authBloc/auth_bloc.dart'; // Importación de tu bloque de autenticación
+import 'package:inmobiliariaapp/bloc/authBloc/auth_bloc.dart';
 import 'package:inmobiliariaapp/bloc/authBloc/auth_state.dart';
 import 'package:inmobiliariaapp/models/notification_model.dart';
 import 'package:intl/intl.dart';
+import 'package:inmobiliariaapp/utils/themes.dart';
+import 'package:inmobiliariaapp/ui/components/global/custom_button.dart';
+import 'package:inmobiliariaapp/ui/components/global/custom_text.dart';
 
-class NotificationsScreen extends StatelessWidget {
-  // MODIFICADO: Ya no requiere recibir la propiedad ni guardarla de manera rígida
+class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
 
-  // Método para marcar la notificación como leída en Firestore
+  @override
+  State<NotificationsScreen> createState() => _NotificationsScreenState();
+}
+
+class _NotificationsScreenState extends State<NotificationsScreen> {
+  // 1. CONFIGURACIÓN DE PAGINACIÓN INTERNA
+  int _currentLimit = 8;
+  final int _pagingStep =
+      8; // Cuántas notificaciones extra se cargarán por click
+
   Future<void> _markAsRead(String userId, String notificationId) async {
     await FirebaseFirestore.instance
         .collection('users')
@@ -21,7 +32,6 @@ class NotificationsScreen extends StatelessWidget {
         .update({'isRead': true});
   }
 
-  // Método para eliminar una notificación individual (Deslizar para borrar)
   Future<void> _deleteNotification(String userId, String notificationId) async {
     await FirebaseFirestore.instance
         .collection('users')
@@ -31,18 +41,26 @@ class NotificationsScreen extends StatelessWidget {
         .delete();
   }
 
+  // Método helper para aumentar el límite de la consulta
+  void _loadMoreNotifications() {
+    setState(() {
+      _currentLimit += _pagingStep;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final primaryColor = Theme.of(context).primaryColor;
-
-    // 1. EXTRAER EL ESTADO DE AUTENTICACIÓN
+    // EXTRAER EL ESTADO DE AUTENTICACIÓN
     final authState = context.read<AuthBloc>().state;
 
-    // Control de flujo por si acaso la vista se monta sin credenciales válidas
     if (authState is! Authenticated) {
       return const Scaffold(
         body: Center(
-          child: Text('Inicia sesión para visualizar tu historial de alertas.'),
+          child: CustomText(
+            'Inicia sesión para visualizar tu historial de alertas.',
+            baseFontSize: 14,
+            textAlign: TextAlign.center,
+          ),
         ),
       );
     }
@@ -52,9 +70,10 @@ class NotificationsScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text(
+        title: const CustomText(
           'Centro de Notificaciones',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          baseFontSize: 16,
+          fontWeight: FontWeight.bold,
         ),
         centerTitle: true,
         elevation: 0,
@@ -62,17 +81,24 @@ class NotificationsScreen extends StatelessWidget {
         foregroundColor: Colors.black,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // 2. CONEXIÓN EN TIEMPO REAL CON LA VARIABLE COMPARTIDA EN EL CONTEXTO
+        // 2. CONSULTA DINÁMICA CON LÍMITE CONTROLADO POR EL ESTADO
         stream: FirebaseFirestore.instance
             .collection('users')
             .doc(userId)
             .collection('notifications')
             .orderBy('createdAt', descending: true)
+            .limit(
+              _currentLimit,
+            ) // <-- Aquí reducimos la carga de la base de datos
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasError) {
             return Center(
-              child: Text('Error al cargar notificaciones: ${snapshot.error}'),
+              child: CustomText(
+                'Error al cargar notificaciones: ${snapshot.error}',
+                baseFontSize: 14,
+                color: context.errorColor,
+              ),
             );
           }
 
@@ -82,57 +108,108 @@ class NotificationsScreen extends StatelessWidget {
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.notifications_off_outlined,
-                    size: 80,
-                    color: Colors.grey[400],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Tu bandeja está limpia',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey[600],
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.notifications_off_outlined,
+                      size: ResponsiveUtils.getWidth(context, 20),
+                      color: Colors.grey[300],
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Aquí verás los avisos de tus contratos e inmuebles.',
-                    style: TextStyle(fontSize: 14, color: Colors.grey[400]),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    const CustomText(
+                      'Tu bandeja está limpia',
+                      baseFontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    const SizedBox(height: 8),
+                    CustomText(
+                      'Aquí verás los avisos de tus contratos e inmuebles.',
+                      baseFontSize: 13,
+                      color: Colors.grey[400]!,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
               ),
             );
           }
 
-          final notifications = snapshot.data!.docs
+          final docs = snapshot.data!.docs;
+          final notifications = docs
               .map((doc) => NotificationModel.fromFirestore(doc))
               .toList();
 
+          // 3. SE DETERMINA SI QUEDAN MÁS DOCUMENTOS EN FIREBASE
+          // Si el número de documentos actuales es igual al límite establecido,
+          // asumimos que potencialmente hay más datos por leer en la colección.
+          final bool hasMoreAvailable = docs.length == _currentLimit;
+
           return ListView.builder(
-            itemCount: notifications.length,
-            padding: const EdgeInsets.symmetric(vertical: 8),
+            // Sumamos 1 al conteo para renderizar el botón de "Cargar más" al final
+            itemCount: hasMoreAvailable
+                ? notifications.length + 1
+                : notifications.length,
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
             itemBuilder: (context, index) {
+              // 4. SI LLEGAMOS AL ELEMENTO EXTRA, RENDERIZAMOS EL BOTÓN DE CARGA
+              if (index == notifications.length) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: CustomButton(
+                    height: ResponsiveUtils.getHeight(context, 5.0),
+                    backgroundColor: Colors.transparent,
+                    borderSide: BorderSide(
+                      color: context.primaryColor,
+                      width: 1.2,
+                    ),
+                    borderRadius: 10,
+                    onPressed: _loadMoreNotifications,
+                    childText: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.arrow_downward_rounded,
+                          size: 16,
+                          color: context.primaryColor,
+                        ),
+                        const SizedBox(width: 8),
+                        CustomText(
+                          "Cargar más notificaciones",
+                          baseFontSize: 13,
+                          fontWeight: FontWeight.bold,
+                          color: context.primaryColor,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
               final notification = notifications[index];
 
               return Dismissible(
                 key: Key(notification.id),
                 direction: DismissDirection.endToStart,
                 background: Container(
-                  color: Colors.red,
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    color: context.errorColor,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   alignment: Alignment.centerRight,
                   padding: const EdgeInsets.only(right: 20),
                   child: const Icon(
-                    Icons.delete_forever,
+                    Icons.delete_forever_rounded,
                     color: Colors.white,
-                    size: 28,
+                    size: 26,
                   ),
                 ),
-                // Ajustado: Pasamos el userId al método asíncrono
                 onDismissed: (direction) =>
                     _deleteNotification(userId, notification.id),
                 child: Container(
@@ -143,11 +220,16 @@ class NotificationsScreen extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: notification.isRead
                         ? Colors.white
-                        : Colors.blue[50]?.withOpacity(0.4),
+                        : context.primaryColor.withOpacity(0.04),
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: notification.isRead
+                          ? Colors.grey.shade100
+                          : context.primaryColor.withOpacity(0.12),
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.02),
+                        color: Colors.black.withOpacity(0.01),
                         blurRadius: 6,
                         offset: const Offset(0, 2),
                       ),
@@ -156,38 +238,38 @@ class NotificationsScreen extends StatelessWidget {
                   child: ListTile(
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
-                      vertical: 8,
+                      vertical: 4,
                     ),
                     leading: CircleAvatar(
+                      radius: 20,
                       backgroundColor: _getIconBackgroundColor(
+                        context,
                         notification.type,
-                        primaryColor,
                       ),
                       child: Icon(
                         _getIconType(notification.type),
-                        color: _getIconColor(notification.type, primaryColor),
+                        color: _getIconColor(context, notification.type),
+                        size: 20,
                       ),
                     ),
                     title: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Expanded(
-                          child: Text(
+                          child: CustomText(
                             notification.title,
-                            style: TextStyle(
-                              fontWeight: notification.isRead
-                                  ? FontWeight.w600
-                                  : FontWeight.bold,
-                              fontSize: 15,
-                            ),
+                            baseFontSize: 14,
+                            fontWeight: notification.isRead
+                                ? FontWeight.w600
+                                : FontWeight.bold,
                           ),
                         ),
                         if (!notification.isRead)
                           Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: Colors.blue,
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: context.primaryColor,
                               shape: BoxShape.circle,
                             ),
                           ),
@@ -196,30 +278,26 @@ class NotificationsScreen extends StatelessWidget {
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const SizedBox(height: 6),
-                        Text(
+                        const SizedBox(height: 4),
+                        CustomText(
                           notification.body,
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 13,
-                            height: 1.3,
-                          ),
+                          baseFontSize: 12,
+                          color: Colors.grey[600]!,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        const SizedBox(height: 8),
-                        Text(
+                        const SizedBox(height: 6),
+                        CustomText(
                           DateFormat(
                             'dd MMM yyyy • hh:mm a',
                           ).format(notification.createdAt),
-                          style: TextStyle(
-                            color: Colors.grey[400],
-                            fontSize: 11,
-                          ),
+                          baseFontSize: 10,
+                          color: Colors.grey[400]!,
                         ),
                       ],
                     ),
                     onTap: () {
                       if (!notification.isRead) {
-                        // Ajustado: Pasamos el userId al método asíncrono
                         _markAsRead(userId, notification.id);
                       }
                     },
@@ -245,15 +323,16 @@ class NotificationsScreen extends StatelessWidget {
     }
   }
 
-  Color _getIconColor(String type, Color primaryColor) {
-    if (type == 'property_created') return Colors.green;
-    if (type == 'contract_active') return Colors.orange;
-    return primaryColor;
+  Color _getIconColor(BuildContext context, String type) {
+    if (type == 'property_created') return context.successColor;
+    if (type == 'contract_active') return Colors.orange[800]!;
+    return context.primaryColor;
   }
 
-  Color _getIconBackgroundColor(String type, Color primaryColor) {
-    if (type == 'property_created') return Colors.green[50]!;
+  Color _getIconBackgroundColor(BuildContext context, String type) {
+    if (type == 'property_created')
+      return context.successColor.withOpacity(0.08);
     if (type == 'contract_active') return Colors.orange[50]!;
-    return primaryColor.withOpacity(0.1);
+    return context.primaryColor.withOpacity(0.08);
   }
 }

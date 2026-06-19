@@ -180,7 +180,7 @@ class AdminPropertiesView extends StatelessWidget {
                           vertical: 6,
                         ),
                         decoration: BoxDecoration(
-                          color: StatusFormatter.getPropertyStatusColor(status),
+                          color: StatusFormatter.getPropertyStatusColor(status, context),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(

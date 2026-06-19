@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:inmobiliariaapp/utils/themes.dart';
 
 class StatusFormatter {
   // --- 1. TRADUCCIÓN DE TEXTOS PARA PROPIEDADES ---
@@ -8,7 +9,7 @@ class StatusFormatter {
       case 'pendingreview':
         return "Revisión Jurídica Pendiente";
       case 'rejected':
-        return "Documentación Rechazada";
+        return "Datos Rechazadas";
 
       // Fase de Pagos de Activación
       case 'approvedpendingpayment':
@@ -26,6 +27,7 @@ class StatusFormatter {
       case 'signedpendingreview':
         return "Firma Entregada (En Verificación)";
       case 'signaturerejected':
+      case 'signatureRejectedTenant':
         return "Firma Rechazada (Corregir)";
 
       // Estados Finales y de Salida
@@ -42,10 +44,10 @@ class StatusFormatter {
   }
 
   // --- 2. COLORES SEGÚN EL ESTADO (Para Badges o Iconos) ---
-  static Color getPropertyStatusColor(String status) {
+  static Color getPropertyStatusColor(String status, BuildContext context) {
     switch (status.toLowerCase().replaceAll('_', '')) {
       case 'active':
-        return Colors.green;
+        return context.successColor;
 
       case 'pendingreview':
       case 'paidpendingreview':
